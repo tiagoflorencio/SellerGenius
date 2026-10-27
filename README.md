@@ -8,65 +8,111 @@ Painel para vendedores do Mercado Livre com agentes de IA:
 
 O sistema é **somente leitura** no Mercado Livre: toda recomendação passa pela sua aprovação e é aplicada manualmente por você.
 
+## Como funciona
+
+O sistema tem duas partes:
+
+- **Backend (API)**: roda no **seu computador**. Guarda seus dados (banco SQLite), as credenciais do Mercado Livre e conversa com o Mercado Livre e a IA.
+- **Painel (site)**: a tela que você usa. Pode rodar também no seu computador, ou ficar online na Vercel conversando com o backend do seu PC por um túnel seguro.
+
+Os seus dados nunca saem do seu computador, exceto o que a IA precisa para analisar.
+
 ## Tecnologias
 
 - Backend: .NET 9 (minimal API), EF Core + SQLite (`backend/`)
 - Frontend: Vue 3 + TypeScript + Vite (`frontend/`)
 - IA: OpenAI (chave configurada no servidor)
 
-## Como rodar
+## Baixar e rodar o backend no seu computador
 
-Pré-requisitos: .NET 9 SDK e Node.js 20+.
+### 1. Instale os pré-requisitos (Windows)
+
+- [Git](https://git-scm.com/downloads)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [Node.js 20+](https://nodejs.org/) (para o painel local)
+
+Confira no PowerShell: `git --version`, `dotnet --version` e `node --version`.
+
+### 2. Baixe o projeto
 
 ```powershell
-.\dev.ps1          # sobe a API (http://localhost:5172) e o painel (http://localhost:5173)
-.\dev.ps1 -Stop    # encerra os dois
+git clone https://github.com/tiagoflorencio/SellerGenius.git
+cd SellerGenius
 ```
 
-Sem PowerShell: `dotnet run --launch-profile http` em `backend/src/AgentOffice.Api` e `npm install && npm run dev` em `frontend`.
+Sem Git: na página do repositório no GitHub use **Code → Download ZIP**, extraia e abra a pasta no PowerShell.
 
-## Conectar ao Mercado Livre
+### 3. Configure (uma vez só)
 
-1. Crie um aplicativo em <https://developers.mercadolivre.com.br/devcenter/> e cole nele, em "URIs de redirect", a URL de redirecionamento exibida em **Configurações** (ela é gerada automaticamente a partir do endereço público HTTPS em que o painel foi aberto, terminando em `/api/auth/callback`; se a API tiver endereço próprio, defina `App:PublicUrl`).
-2. No painel, abra **Configurações**, informe App ID e Secret Key e salve.
-3. Clique em **Conectar conta** e autorize o acesso.
-
-O Mercado Livre não aceita `http://localhost`. Em desenvolvimento local, suba um túnel (por exemplo `.\dev.ps1 -Tunnel`, que usa o devtunnel) e informe a URL dele em **Configurações → Avançado** (`https://seu-tunel/auth/callback`) ou defina `App:PublicUrl`.
-
-As credenciais e os tokens ficam criptografados em `backend/src/AgentOffice.Api/App_Data` (ignorado pelo Git). A chave secreta nunca é devolvida pela API.
-
-Se a API e o painel não estiverem em `http://localhost:5173`, defina `Frontend:Url` com o endereço do painel (para onde o login retorna).
-
-## IA (OpenAI)
+Os segredos ficam fora do projeto, no seu perfil do Windows (*user-secrets*), nunca no Git:
 
 ```powershell
 cd backend/src/AgentOffice.Api
-dotnet user-secrets set "OpenAI:ApiKey" "sua-chave"
+dotnet user-secrets set "OpenAI:ApiKey" "sua-chave-da-openai"
+dotnet user-secrets set "Auth:AccessPassword" "uma-senha-longa-para-entrar-no-sistema"
+cd ../../..
 ```
 
-Opcionalmente `OpenAI:Model` e `OpenAI:AdsModel` (modelo da análise de Ads).
+- `OpenAI:ApiKey`: chave da OpenAI usada pelos agentes. Opcionalmente `OpenAI:Model` e `OpenAI:AdsModel`.
+- `Auth:AccessPassword`: senha para entrar no sistema. **Defina sempre que usar o túnel** (passo 6), porque ele deixa a API acessível pela internet. Sem senha, a API só responde ao próprio computador.
 
-## Publicar em produção (Vercel + Railway)
+### 4. Inicie
 
-O painel (Vue) vai para a **Vercel** e a API (.NET + SQLite) para o **Railway** (ou Render/Fly.io), porque a API precisa de disco persistente.
+```powershell
+.\dev.ps1          # sobe a API (http://localhost:5172) e o painel local (http://localhost:5173)
+.\dev.ps1 -Stop    # encerra os dois
+```
 
-**1. API no Railway**
+Na primeira vez o painel instala as dependências sozinho. Abra <http://localhost:5173>.
 
-1. Crie um projeto a partir do repositório do GitHub: o Railway usa o `Dockerfile` da raiz.
-2. Adicione um **Volume** montado em `/data` (banco, credenciais, tokens e chaves).
-3. Em *Variables*, defina:
-   - `Auth__AccessPassword`: a senha de acesso ao sistema (use uma longa).
-   - `OpenAI__ApiKey`: a chave da OpenAI.
-   - `Frontend__Url`: o endereço do painel na Vercel (ex.: `https://seu-projeto.vercel.app`).
-4. Gere o domínio público em *Settings → Networking* e anote a URL (ex.: `https://agentoffice-production.up.railway.app`). Teste `/health`.
+Sem o `dev.ps1` (Linux/macOS ou outro terminal): `dotnet run --launch-profile http` em `backend/src/AgentOffice.Api` e `npm install && npm run dev` em `frontend`.
 
-**2. Painel na Vercel**
+Os dados ficam em `backend/src/AgentOffice.Api/App_Data` (banco, credenciais e tokens criptografados). Para fazer backup, copie essa pasta com a API parada. Para atualizar o sistema: `git pull` e reinicie.
 
-1. Edite `frontend/vercel.json` e troque `SEU-BACKEND.up.railway.app` pela URL da API.
-2. Importe o repositório na Vercel com *Root Directory* = `frontend` (framework Vite).
-3. Abra o endereço da Vercel, entre com a senha e vá em **Configurações**: a URL de redirecionamento aparece pronta (`https://seu-projeto.vercel.app/api/auth/callback`). Cole-a no aplicativo do Mercado Livre, informe App ID e Secret Key e conecte.
+### 5. Conecte ao Mercado Livre
 
-Sem `Auth__AccessPassword` a API só responde a requisições locais (nada é exposto por engano).
+O Mercado Livre só aceita endereços **HTTPS públicos** no retorno do login (não aceita `http://localhost`), por isso é preciso um túnel (passo 6).
+
+1. Crie um aplicativo em <https://developers.mercadolivre.com.br/devcenter/>.
+2. No sistema, abra **Configurações**, informe o **App ID** e a **Secret Key** do aplicativo e salve.
+3. Copie a **URL de redirecionamento** exibida (botão *Copiar*) e cole em *URIs de redirect* no aplicativo do Mercado Livre.
+4. Clique em **Conectar conta** e autorize o acesso.
+
+Com o painel local (`localhost`) a URL não pode ser gerada sozinha: use **Configurações → Avançado** e informe `https://SEU-TUNEL/auth/callback` (endereço do túnel do passo 6). Com o painel online na Vercel (passo 7) ela já aparece pronta.
+
+### 6. Túnel HTTPS (Microsoft devtunnel, gratuito)
+
+O túnel dá ao seu backend um endereço HTTPS público e estável.
+
+```powershell
+winget install Microsoft.devtunnel          # só na primeira vez; reabra o PowerShell depois
+devtunnel user login                        # só na primeira vez
+devtunnel create agentoffice --allow-anonymous
+devtunnel port create agentoffice -p 5172
+```
+
+Daqui em diante, para subir tudo junto: `.\dev.ps1 -Tunnel` (inicia a API, o painel e o túnel). O endereço aparece na janela do túnel, no formato `https://xxxx-5172.brs.devtunnels.ms`; é ele que você usa no passo 5 (Avançado) ou no passo 7.
+
+Se o login do devtunnel expirar, rode `devtunnel user login` de novo.
+
+### 7. (Opcional) Painel online na Vercel
+
+Para acessar de qualquer lugar sem abrir o painel local (com o backend e o túnel ligados no seu PC):
+
+1. Defina o endereço do painel, para onde o login do Mercado Livre retorna:
+   ```powershell
+   cd backend/src/AgentOffice.Api
+   dotnet user-secrets set "Frontend:Url" "https://seu-projeto.vercel.app"
+   ```
+2. Em `frontend/vercel.json`, troque `SEU-TUNEL.devtunnels.ms` pelo endereço do túnel, sem `https://` e sem `/` no final (ex.: `abc123-5172.brs.devtunnels.ms`), e faça commit e push.
+3. Na [Vercel](https://vercel.com), importe o repositório com *Root Directory* = `frontend` (framework Vite).
+4. Abra o endereço da Vercel, entre com a senha e use **Configurações**: a URL de redirecionamento já aparece pronta (`https://seu-projeto.vercel.app/api/auth/callback`).
+
+O sistema só responde enquanto o computador, a API e o túnel estiverem ligados.
+
+## Alternativa: API em um servidor na nuvem
+
+O `Dockerfile` da raiz roda a API em qualquer hospedagem com Docker e disco persistente (Railway, Fly.io, uma VM). Monte um volume em `/data` e defina as variáveis `Auth__AccessPassword`, `OpenAI__ApiKey` e `Frontend__Url`. O restante (Vercel) é igual ao passo 7, apontando o `vercel.json` para o endereço do servidor.
 
 ## Testes
 
@@ -77,5 +123,6 @@ dotnet test backend
 ## Segurança
 
 - Nunca versione chaves: `App_Data/`, bancos e `.env` estão no `.gitignore`; segredos ficam em user-secrets ou variáveis de ambiente.
-- As rotas da API exigem sessão: com `Auth__AccessPassword` definida, é preciso entrar com a senha (cookie HttpOnly, 7 dias, bloqueio temporário após 8 erros); sem senha, só aceitam `localhost`. Apenas `/health`, `/auth/session` e o retorno do login do Mercado Livre (`/auth/callback`, protegido por `state`) são públicos.
+- A chave secreta do Mercado Livre é guardada criptografada e nunca é devolvida pela API.
+- As rotas da API exigem sessão: com `Auth:AccessPassword` definida, é preciso entrar com a senha (cookie HttpOnly, 7 dias, bloqueio temporário após 8 erros); sem senha, só aceitam `localhost`. Apenas `/health`, `/auth/session` e o retorno do login do Mercado Livre (`/auth/callback`, protegido por `state`) são públicos.
 - Este projeto é de um único vendedor (uma senha, uma conta do Mercado Livre). Para vender a vários clientes, é preciso adicionar contas de usuário e separar os dados por cliente.
