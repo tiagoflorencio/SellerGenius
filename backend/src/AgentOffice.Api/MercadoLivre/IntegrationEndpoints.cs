@@ -1,6 +1,3 @@
-using AgentOffice.Api.Ai;
-using Microsoft.Extensions.Options;
-
 namespace AgentOffice.Api.MercadoLivre;
 
 public record CredentialsRequest(string? AppId, string? ClientSecret, string? RedirectUri);
@@ -15,8 +12,7 @@ public static class IntegrationEndpoints
 
         // GET /settings/integrations: situação de cada integração (credenciais, conexão e conta).
         group.MapGet("/integrations", async (
-            MercadoLivreCredentialsStore credentials, TokenStore tokens, MercadoLivreClient ml,
-            IOptions<OpenAiOptions> openAi, CancellationToken ct) =>
+            MercadoLivreCredentialsStore credentials, TokenStore tokens, MercadoLivreClient ml, CancellationToken ct) =>
         {
             var creds = credentials.Resolve();
             var connected = tokens.Load() is not null;
@@ -47,11 +43,6 @@ public static class IntegrationEndpoints
                     connected,
                     account = account is null ? null : new { account.Id, account.Nickname, account.SiteId },
                     accountError,
-                },
-                openAi = new
-                {
-                    configured = !string.IsNullOrWhiteSpace(openAi.Value.ApiKey),
-                    model = openAi.Value.Model,
                 },
             });
         });

@@ -80,7 +80,6 @@ export interface IntegrationsStatus {
     account: MlUser | null
     accountError: string | null
   }
-  openAi: { configured: boolean; model: string }
 }
 
 // Anúncio + diagnóstico + última sugestão + publicidade, já juntos para a tabela.

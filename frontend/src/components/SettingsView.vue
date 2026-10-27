@@ -178,26 +178,6 @@ const canSave = computed(() => appId.value.trim() && redirectUri.value.trim() &&
         As credenciais ficam criptografadas neste computador e a chave secreta nunca é exibida novamente.
       </p>
     </section>
-
-    <section class="panel">
-      <header class="panel-head">
-        <div class="logo ai">IA</div>
-        <div class="grow">
-          <h2>Inteligência artificial (OpenAI)</h2>
-          <p class="muted">Usada para sugerir melhorias nos anúncios e analisar as campanhas de Ads.</p>
-        </div>
-        <span class="chip" :class="status?.openAi.configured ? 'ok' : 'warn'">
-          {{ status ? (status.openAi.configured ? 'Chave configurada' : 'Chave ausente') : 'Verificando...' }}
-        </span>
-      </header>
-      <p v-if="status?.openAi.configured" class="muted">Modelo padrão: <code>{{ status.openAi.model }}</code>.</p>
-      <template v-else>
-        <p class="muted">Defina a chave da sua conta OpenAI no servidor (ela não é guardada pelo navegador):</p>
-        <pre><code>cd backend/src/AgentOffice.Api
-dotnet user-secrets set "OpenAI:ApiKey" "sua-chave"</code></pre>
-        <p class="muted">Depois reinicie a API e atualize esta página.</p>
-      </template>
-    </section>
   </div>
 </template>
 
@@ -243,10 +223,6 @@ dotnet user-secrets set "OpenAI:ApiKey" "sua-chave"</code></pre>
 .logo.ml {
   background: #ffe600;
   color: #2d3277;
-}
-.logo.ai {
-  background: #0f172a;
-  color: #fff;
 }
 .muted,
 small {
@@ -360,13 +336,6 @@ small {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
-}
-pre {
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 10px;
-  padding: 12px 14px;
-  overflow-x: auto;
 }
 code {
   font-size: 12.5px;

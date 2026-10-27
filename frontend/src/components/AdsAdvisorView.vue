@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { activity } from '../activity'
 import { api } from '../api'
 import type { AdRecommendation, RecommendationStatus, RecommendationsResponse } from '../types'
-import { formatDateTime, formatDay, formatMoney, formatNumber, todayIso } from '../format'
+import { formatDateTime, formatDay, formatMoney, todayIso } from '../format'
 import FindingList from './FindingList.vue'
 
 const props = defineProps<{ days: number }>()
@@ -118,7 +118,7 @@ const run = computed(() => data.value?.run ?? null)
         {{ analyzing ? 'Analisando... (pode levar alguns segundos)' : 'Analisar com IA' }}
       </button>
       <span class="muted">
-        Usa os dados já sincronizados (últimos {{ days }} dias) e a OpenAI (centavos por análise). Nada é alterado no
+        Analisa os dados já sincronizados (últimos {{ days }} dias). Nada é alterado no
         Mercado Livre.
       </span>
       <select
@@ -145,8 +145,7 @@ const run = computed(() => data.value?.run ?? null)
         <h3>Resumo do agente</h3>
         <p>{{ run.summary || 'Sem resumo.' }}</p>
         <p class="meta">
-          {{ formatDateTime(run.createdAt) }} · {{ run.model }} · manual {{ run.manualHash }}
-          <template v-if="run.promptTokens"> · {{ formatNumber(run.promptTokens) }} + {{ formatNumber(run.completionTokens) }} tokens</template>
+          {{ formatDateTime(run.createdAt) }}
         </p>
         <p v-if="run.dataQuality.estado" class="meta">
           Qualidade dos dados: <strong>{{ run.dataQuality.estado }}</strong>

@@ -128,7 +128,8 @@ const statusText: Record<string, string> = { Pending: 'Pendente', Approved: 'Apr
             <button
               v-else
               :disabled="suggestingId !== null || row.status !== 'active'"
-              title="Gera uma sugestão com a IA (consome créditos da OpenAI)"
+              title="Gera uma sugestão de melhoria para o anúncio, pode usar as sugestões para editar 
+              o anúncio existente ou criar uma variação"
               @click="emit('suggest', row.itemId)"
             >
               {{ suggestingId === row.itemId ? 'Gerando...' : 'Gerar' }}
