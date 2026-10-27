@@ -8,6 +8,7 @@ using AgentOffice.Api.Ai;
 using AgentOffice.Api.Ads;
 using AgentOffice.Api.Data;
 using AgentOffice.Api.MercadoLivre;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -30,7 +31,8 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<MercadoLivreOptions>(builder.Configuration.GetSection("MercadoLivre"));
 
 // Criptografia usada pelo TokenStore para proteger os tokens salvos em disco.
-builder.Services.AddDataProtection();
+// O nome fixo evita que mover a pasta do projeto invalide os dados protegidos (por padrão o ASP.NET usa o caminho da pasta).
+builder.Services.AddDataProtection().SetApplicationName("AgentOffice");
 
 // TRAVA DE SEGURANÇA: o HttpClient "MercadoLivre" é o ÚNICO canal para falar com o Mercado Livre,
 // e todo tráfego dele passa pela ReadOnlyGuardHandler, que bloqueia qualquer escrita.

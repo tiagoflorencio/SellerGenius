@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -22,13 +23,21 @@ public class TokenStore(IDataProtectionProvider dataProtection, IWebHostEnvironm
 
     private readonly string _path = Path.Combine(env.ContentRootPath, "App_Data", "ml-tokens.bin");
 
-    // Lê e descriptografa os tokens. Retorna null se ainda não houve login.
+    // Lê e descriptografa os tokens. Retorna null se ainda não houve login ou se o arquivo não pôde ser lido
+    // (ex.: foi criptografado por outra instalação); nos dois casos basta fazer o login de novo.
     public MercadoLivreTokens? Load()
     {
         if (!File.Exists(_path)) return null;
 
-        var json = _protector.Unprotect(File.ReadAllText(_path));
-        return JsonSerializer.Deserialize<MercadoLivreTokens>(json);
+        try
+        {
+            var json = _protector.Unprotect(File.ReadAllText(_path));
+            return JsonSerializer.Deserialize<MercadoLivreTokens>(json);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
     }
 
     // Criptografa e grava os tokens (criando a pasta App_Data se necessário).
