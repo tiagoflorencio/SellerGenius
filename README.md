@@ -42,32 +42,47 @@ cd SellerGenius
 
 Sem Git: na página do repositório no GitHub use **Code → Download ZIP**, extraia e abra a pasta no PowerShell.
 
+> **Pasta raiz do projeto:** é a pasta que contém `backend`, `frontend`, `docs` e o arquivo `dev.ps1` (aqui, `SellerGenius`; na sua máquina de desenvolvimento, `AgentOffice`). Todos os comandos abaixo dizem a partir de qual pasta executar. O `dev.ps1` **só funciona na pasta raiz**.
+
 ### 3. Configure (uma vez só)
 
-Os segredos ficam fora do projeto, no seu perfil do Windows (*user-secrets*), nunca no Git:
+Os segredos ficam fora do projeto, no seu perfil do Windows (*user-secrets*), nunca no Git. Execute **a partir da pasta raiz**:
 
 ```powershell
-cd backend/src/AgentOffice.Api
+cd backend\src\AgentOffice.Api
 dotnet user-secrets set "OpenAI:ApiKey" "sua-chave-da-openai"
 dotnet user-secrets set "Auth:AccessPassword" "uma-senha-longa-para-entrar-no-sistema"
-cd ../../..
+cd ..\..\..
 ```
+
+O último `cd ..\..\..` volta para a pasta raiz. Para conferir o que está salvo: `dotnet user-secrets list` (na pasta `backend\src\AgentOffice.Api`).
 
 - `OpenAI:ApiKey`: chave da OpenAI usada pelos agentes. Opcionalmente `OpenAI:Model` e `OpenAI:AdsModel`.
-- `Auth:AccessPassword`: senha para entrar no sistema. **Defina sempre que usar o túnel** (passo 6), porque ele deixa a API acessível pela internet. Sem senha, a API só responde ao próprio computador.
+- `Auth:AccessPassword`: senha para entrar no sistema. **Defina sempre que usar o túnel** (passo 6), porque ele deixa a API acessível pela internet. Use uma senha longa e difícil de adivinhar. Sem senha, a API só responde ao próprio computador. Para trocar a senha, rode o mesmo comando de novo e reinicie.
 
-### 4. Inicie
+### 4. Inicie a API e o painel
+
+Execute **na pasta raiz do projeto** (onde está o `dev.ps1`):
 
 ```powershell
-.\dev.ps1          # sobe a API (http://localhost:5172) e o painel local (http://localhost:5173)
-.\dev.ps1 -Stop    # encerra os dois
+cd "C:\caminho\para\SellerGenius"   # pasta raiz
+.\dev.ps1                            # sobe a API (http://localhost:5172) e o painel (http://localhost:5173)
 ```
 
-Na primeira vez o painel instala as dependências sozinho. Abra <http://localhost:5173>.
+Isso abre **duas janelas** do PowerShell (uma para a API, outra para o painel); deixe-as abertas enquanto usa o sistema. Na primeira vez o painel instala as dependências sozinho (leva alguns minutos). Depois abra <http://localhost:5173> no navegador.
 
-Sem o `dev.ps1` (Linux/macOS ou outro terminal): `dotnet run --launch-profile http` em `backend/src/AgentOffice.Api` e `npm install && npm run dev` em `frontend`.
+Para encerrar, na pasta raiz: `.\dev.ps1 -Stop` (ou feche as janelas). Se alterar um segredo (passo 3), encerre e inicie de novo.
 
-Os dados ficam em `backend/src/AgentOffice.Api/App_Data` (banco, credenciais e tokens criptografados). Para fazer backup, copie essa pasta com a API parada. Para atualizar o sistema: `git pull` e reinicie.
+Se aparecer "scripts desabilitados" ao rodar o `dev.ps1`, libere na sessão atual: `Set-ExecutionPolicy -Scope Process Bypass` e rode de novo.
+
+**Sem o `dev.ps1`** (Linux/macOS ou outro terminal), use dois terminais, cada um na pasta indicada:
+
+| Terminal | Pasta | Comando |
+|---|---|---|
+| 1 (API) | `backend/src/AgentOffice.Api` | `dotnet run --launch-profile http` |
+| 2 (painel) | `frontend` | `npm install` (só na primeira vez) e depois `npm run dev` |
+
+Os dados ficam em `backend/src/AgentOffice.Api/App_Data` (banco, credenciais e tokens criptografados). Para fazer backup, copie essa pasta com a API parada. Para atualizar o sistema: `git pull` na pasta raiz e reinicie.
 
 ### 5. Conecte ao Mercado Livre
 
@@ -85,13 +100,15 @@ Com o painel local (`localhost`) a URL não pode ser gerada sozinha: use **Confi
 O túnel dá ao seu backend um endereço HTTPS público e estável.
 
 ```powershell
-winget install Microsoft.devtunnel          # só na primeira vez; reabra o PowerShell depois
-devtunnel user login                        # só na primeira vez
+winget install Microsoft.devtunnel          # só na primeira vez; feche e reabra o PowerShell depois
+devtunnel user login                        # só na primeira vez (abre o navegador)
 devtunnel create agentoffice --allow-anonymous
 devtunnel port create agentoffice -p 5172
 ```
 
-Daqui em diante, para subir tudo junto: `.\dev.ps1 -Tunnel` (inicia a API, o painel e o túnel). O endereço aparece na janela do túnel, no formato `https://xxxx-5172.brs.devtunnels.ms`; é ele que você usa no passo 5 (Avançado) ou no passo 7.
+Esses quatro comandos podem ser executados em qualquer pasta, uma única vez.
+
+Daqui em diante, para subir tudo junto, **na pasta raiz do projeto**: `.\dev.ps1 -Tunnel` (inicia a API, o painel e o túnel, em três janelas). O endereço aparece na janela do túnel, no formato `https://xxxx-5172.brs.devtunnels.ms`; para consultá-lo depois: `devtunnel show agentoffice`. É ele que você usa no passo 5 (Avançado) ou no passo 7. O endereço permanece o mesmo enquanto o túnel `agentoffice` existir.
 
 Se o login do devtunnel expirar, rode `devtunnel user login` de novo.
 
