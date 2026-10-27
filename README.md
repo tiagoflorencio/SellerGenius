@@ -46,6 +46,28 @@ dotnet user-secrets set "OpenAI:ApiKey" "sua-chave"
 
 Opcionalmente `OpenAI:Model` e `OpenAI:AdsModel` (modelo da análise de Ads).
 
+## Publicar em produção (Vercel + Railway)
+
+O painel (Vue) vai para a **Vercel** e a API (.NET + SQLite) para o **Railway** (ou Render/Fly.io), porque a API precisa de disco persistente.
+
+**1. API no Railway**
+
+1. Crie um projeto a partir do repositório do GitHub: o Railway usa o `Dockerfile` da raiz.
+2. Adicione um **Volume** montado em `/data` (banco, credenciais, tokens e chaves).
+3. Em *Variables*, defina:
+   - `Auth__AccessPassword`: a senha de acesso ao sistema (use uma longa).
+   - `OpenAI__ApiKey`: a chave da OpenAI.
+   - `Frontend__Url`: o endereço do painel na Vercel (ex.: `https://seu-projeto.vercel.app`).
+4. Gere o domínio público em *Settings → Networking* e anote a URL (ex.: `https://agentoffice-production.up.railway.app`). Teste `/health`.
+
+**2. Painel na Vercel**
+
+1. Edite `frontend/vercel.json` e troque `SEU-BACKEND.up.railway.app` pela URL da API.
+2. Importe o repositório na Vercel com *Root Directory* = `frontend` (framework Vite).
+3. Abra o endereço da Vercel, entre com a senha e vá em **Configurações**: a URL de redirecionamento aparece pronta (`https://seu-projeto.vercel.app/api/auth/callback`). Cole-a no aplicativo do Mercado Livre, informe App ID e Secret Key e conecte.
+
+Sem `Auth__AccessPassword` a API só responde a requisições locais (nada é exposto por engano).
+
 ## Testes
 
 ```powershell
@@ -55,5 +77,5 @@ dotnet test backend
 ## Segurança
 
 - Nunca versione chaves: `App_Data/`, bancos e `.env` estão no `.gitignore`; segredos ficam em user-secrets ou variáveis de ambiente.
-- As rotas da API são aceitas apenas de `localhost`; só o retorno do login (`/auth/callback`) é público e protegido por `state`.
-- Este projeto foi pensado para uso local por um único vendedor. Antes de hospedar para vários usuários, adicione autenticação e armazenamento seguro de segredos.
+- As rotas da API exigem sessão: com `Auth__AccessPassword` definida, é preciso entrar com a senha (cookie HttpOnly, 7 dias, bloqueio temporário após 8 erros); sem senha, só aceitam `localhost`. Apenas `/health`, `/auth/session` e o retorno do login do Mercado Livre (`/auth/callback`, protegido por `state`) são públicos.
+- Este projeto é de um único vendedor (uma senha, uma conta do Mercado Livre). Para vender a vários clientes, é preciso adicionar contas de usuário e separar os dados por cliente.

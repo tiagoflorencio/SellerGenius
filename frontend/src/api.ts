@@ -14,6 +14,7 @@ import type {
   MlUser,
   Suggestion,
 } from './types'
+import { session } from './session'
 
 export class ApiError extends Error {
   status: number
@@ -25,8 +26,21 @@ export class ApiError extends Error {
 }
 
 // Todas as chamadas vão para /api/..., que o Vite repassa para a API em C# (ver vite.config.ts).
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// Se o servidor responder que o login é necessário (sessão expirada), o painel volta para a tela de entrada.
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`/api${path}`, init)
+  if (res.status === 401) {
+    try {
+      if ((await res.clone().json()).code === 'login_required') session.authenticated = false
+    } catch {
+      // resposta sem JSON
+    }
+  }
+  return res
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await apiFetch(path, init)
 
   if (!res.ok) {
     let message = `Erro ${res.status}`
@@ -46,11 +60,15 @@ const json = { 'Content-Type': 'application/json' }
 
 // Para rotas que respondem 204 (sem corpo).
 async function requestEmpty(path: string, method: string): Promise<void> {
-  const res = await fetch(`/api${path}`, { method })
+  const res = await apiFetch(path, { method })
   if (!res.ok) throw new ApiError(res.status, `Erro ${res.status}`)
 }
 
 export const api = {
+  session: () => request<{ required: boolean; authenticated: boolean }>('/auth/session'),
+  login: (password: string) =>
+    request<{ authenticated: boolean }>('/auth/session', { method: 'POST', headers: json, body: JSON.stringify({ password }) }),
+  logout: () => requestEmpty('/auth/session', 'DELETE'),
   me: () => request<MlUser>('/ml/me'),
   integrations: () => request<IntegrationsStatus>(`/settings/integrations?origin=${encodeURIComponent(window.location.origin)}`),
   saveMlCredentials: (appId: string, clientSecret: string, redirectUri: string) =>
@@ -93,7 +111,7 @@ export const api = {
   addDiaryNote: (date: string, campaignId: number | null, text: string) =>
     request<{ id: number }>('/ads/diary/notes', { method: 'POST', headers: json, body: JSON.stringify({ date, campaignId, text }) }),
   deleteDiaryNote: async (id: number) => {
-    const res = await fetch(`/api/ads/diary/notes/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/ads/diary/notes/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new ApiError(res.status, `Erro ${res.status}`)
   },
   markApplied: (recommendationId: number, date: string | null) =>

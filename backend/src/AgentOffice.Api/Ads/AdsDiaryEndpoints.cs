@@ -15,7 +15,7 @@ public static class AdsDiaryEndpoints
 
     public static void MapAdsDiaryEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.RequireAccess);
 
         // GET /ads/diary: linha do tempo de mudanças, cada uma com a comparação antes/depois.
         group.MapGet("/diary", async (AdsDiaryService diary, CancellationToken ct) => Results.Ok(await diary.BuildAsync(ct)));

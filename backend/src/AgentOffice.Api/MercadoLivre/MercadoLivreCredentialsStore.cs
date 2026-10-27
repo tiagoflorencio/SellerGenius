@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using AgentOffice.Api.Data;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 
@@ -19,10 +20,11 @@ public record ResolvedCredentials(string AppId, string ClientSecret, string Redi
 public class MercadoLivreCredentialsStore(
     IDataProtectionProvider dataProtection,
     IWebHostEnvironment env,
+    IConfiguration config,
     IOptions<MercadoLivreOptions> options)
 {
     private readonly IDataProtector _protector = dataProtection.CreateProtector("MercadoLivre.Credentials");
-    private readonly string _path = Path.Combine(env.ContentRootPath, "App_Data", "ml-credentials.bin");
+    private readonly string _path = Path.Combine(AppPaths.DataDir(config, env), "ml-credentials.bin");
 
     public MercadoLivreCredentials? Load()
     {

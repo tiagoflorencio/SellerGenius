@@ -8,7 +8,7 @@ public static class IntegrationEndpoints
 {
     public static void MapIntegrationEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/settings").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+        var group = app.MapGroup("/settings").AddEndpointFilter(MercadoLivreEndpoints.RequireAccess);
 
         // GET /settings/integrations: situação de cada integração (credenciais, conexão e conta).
         group.MapGet("/integrations", async (

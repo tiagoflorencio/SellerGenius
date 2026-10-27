@@ -10,6 +10,8 @@ import ListingsTable from './components/ListingsTable.vue'
 import SuggestionDrawer from './components/SuggestionDrawer.vue'
 import AdsView from './components/AdsView.vue'
 import SettingsView from './components/SettingsView.vue'
+import LoginView from './components/LoginView.vue'
+import { session } from './session'
 
 const page = ref<Page>('home')
 
@@ -183,6 +185,24 @@ const heading = computed(() => {
   }
 })
 
+async function init() {
+  loading.value = true
+  await Promise.all([loadData(), loadIntegrations()])
+  loadAdsSummary()
+  loading.value = false
+}
+
+async function logout() {
+  await api.logout().catch(() => {})
+  session.authenticated = false
+}
+
+// Depois de entrar com a senha: carrega os dados.
+const loggedIn = () => {
+  session.authenticated = true
+  return init()
+}
+
 onMounted(async () => {
   // Retorno do login do Mercado Livre (/?ml=connected ou /?ml=error&message=...): abre as Configurações com o resultado.
   const params = new URLSearchParams(window.location.search)
@@ -196,14 +216,23 @@ onMounted(async () => {
     window.history.replaceState({}, '', window.location.pathname)
   }
 
-  await Promise.all([loadData(), loadIntegrations()])
-  loadAdsSummary()
-  loading.value = false
+  try {
+    const s = await api.session()
+    session.required = s.required
+    session.authenticated = s.authenticated
+  } catch {
+    // API fora do ar: segue e deixa os avisos normais de erro aparecerem
+  }
+  session.checked = true
+
+  if (session.authenticated) await init()
 })
 </script>
 
 <template>
-  <div class="shell">
+  <LoginView v-if="session.checked && session.required && !session.authenticated" @done="loggedIn" />
+
+  <div v-else-if="session.checked" class="shell">
     <aside class="sidebar">
       <div class="brand">
         <span class="brand-mark">A</span>
@@ -233,6 +262,7 @@ onMounted(async () => {
           </div>
         </div>
         <small class="ro">Acesso somente leitura</small>
+        <button v-if="session.required" class="logout" @click="logout">Sair</button>
       </div>
     </aside>
 
@@ -404,6 +434,12 @@ nav button span {
   display: block;
   color: #fff;
   font-size: 13px;
+}
+.logout {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #cbd5e1;
+  padding: 6px 10px;
 }
 .status small,
 .ro {

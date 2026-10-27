@@ -52,7 +52,7 @@ public static class AdsAgentEndpoints
 
     public static void MapAdsAgentEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.RequireAccess);
 
         // POST /ads/analyze?days=30: roda o agente (IA) sobre os dados salvos e grava as recomendações como Pending.
         group.MapPost("/analyze", async (AdsAdvisor advisor, CancellationToken ct, int days = 30) =>

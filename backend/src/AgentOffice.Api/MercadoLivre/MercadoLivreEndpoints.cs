@@ -1,5 +1,6 @@
 using AgentOffice.Api.Analysis;
 using AgentOffice.Api.Data;
+using AgentOffice.Api.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOffice.Api.MercadoLivre;
@@ -24,7 +25,7 @@ public static class MercadoLivreEndpoints
                     return Results.BadRequest(new { error = ex.Message });
                 }
             })
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
 
         // GET /auth/callback: o Mercado Livre devolve o usuário aqui (via túnel ou domínio público) com ?code=...&state=...
         // Esta rota precisa ficar acessível pela internet; a segurança vem do "state" validado.
@@ -69,7 +70,7 @@ public static class MercadoLivreEndpoints
                     return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
                 }
             })
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
 
         // POST /ml/sync: lê os anúncios no Mercado Livre (somente leitura) e salva no banco local.
         // POST porque altera o NOSSO banco; no Mercado Livre não é alterado nada. Só local.
@@ -92,12 +93,12 @@ public static class MercadoLivreEndpoints
                         statusCode: StatusCodes.Status502BadGateway);
                 }
             })
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
 
         // GET /listings: lista os anúncios já salvos no banco (não chama o Mercado Livre). Só local.
         app.MapGet("/listings", async (AgentOfficeDb db, CancellationToken ct) =>
                 Results.Ok(await db.Listings.OrderBy(l => l.Title).ToListAsync(ct)))
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
 
         // GET /listings/readiness: para cada anúncio, se todos os campos obrigatórios para CRIAR uma variação
         // dele estão disponíveis e, se não, quais faltam. Só lê o banco local.
@@ -121,7 +122,7 @@ public static class MercadoLivreEndpoints
 
                 return Results.Ok(result);
             })
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
 
         // GET /listings/{itemId}/draft: o corpo no formato do POST /items montado a partir do anúncio salvo,
         // mais as pendências. NÃO envia nada ao Mercado Livre.
@@ -135,22 +136,20 @@ public static class MercadoLivreEndpoints
 
                 return Results.Ok(ListingDraftBuilder.Build(detail, category));
             })
-            .AddEndpointFilter(LocalOnly);
+            .AddEndpointFilter(RequireAccess);
     }
 
-    // Filtro de endpoint: só deixa passar requisições feitas na própria máquina.
-    // Como o túnel expõe a API na internet, rotas sensíveis respondem 404 para quem vem de fora.
-    // Detecta "vindo de fora" por: Host diferente de localhost OU cabeçalhos X-Forwarded-* (colocados por proxies).
-    internal static async ValueTask<object?> LocalOnly(
+    // Filtro de endpoint que protege as rotas do sistema (ver AccessControl):
+    // com senha de acesso configurada, exige sessão válida (401); sem senha, só aceita a própria máquina (404 para quem vem de fora).
+    internal static async ValueTask<object?> RequireAccess(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var request = context.HttpContext.Request;
-        var hostIsLocal = request.Host.Host is "localhost" or "127.0.0.1" or "[::1]";
-        var viaProxy = request.Headers.ContainsKey("X-Forwarded-For")
-                       || request.Headers.ContainsKey("X-Forwarded-Host");
+        var access = context.HttpContext.RequestServices.GetRequiredService<AccessControl>();
 
-        if (!hostIsLocal || viaProxy) return Results.NotFound();
+        if (access.IsAllowed(context.HttpContext.Request)) return await next(context);
 
-        return await next(context);
+        return access.PasswordRequired
+            ? Results.Json(new { error = "Faça login para continuar.", code = "login_required" }, statusCode: StatusCodes.Status401Unauthorized)
+            : Results.NotFound();
     }
 }

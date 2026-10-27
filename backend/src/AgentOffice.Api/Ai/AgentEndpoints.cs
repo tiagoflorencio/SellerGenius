@@ -10,7 +10,7 @@ public static class AgentEndpoints
 {
     public static void MapAgentEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/agent").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+        var group = app.MapGroup("/agent").AddEndpointFilter(MercadoLivreEndpoints.RequireAccess);
 
         // GET /agent/diagnosis: alertas por regras para todos os anúncios. Gratuito (não chama a IA).
         group.MapGet("/diagnosis", async (AgentOfficeDb db, CancellationToken ct) =>

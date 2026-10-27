@@ -45,7 +45,7 @@ public static class AdsEndpoints
 {
     public static void MapAdsEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+        var group = app.MapGroup("/ads").AddEndpointFilter(MercadoLivreEndpoints.RequireAccess);
 
         // POST /ads/sync?days=30: lê campanhas, métricas diárias e anúncios no Mercado Livre e salva no banco local.
         group.MapPost("/sync", async (AdsSyncService sync, CancellationToken ct, int days = 30) =>
