@@ -172,6 +172,87 @@ export interface AdCampaignDetail {
   daily: AdDay[]
   adGroups: AdGroup[]
   adGroupsPeriod: { from: string; to: string } | null
+  changes: AdChange[]
+}
+
+// Mudança de configuração detectada entre sincronizações (feita por você no Mercado Livre).
+export interface AdChange {
+  id: number
+  campaignId: number
+  detectedAt: string
+  field: string // Budget, RoasTarget, Status, Strategy ou AutomaticBudget
+  oldValue: string
+  newValue: string
+  note: string | null
+}
+
+// ---- Diagnóstico de Ads (por regras) ----
+export type Severity = 'critical' | 'attention' | 'opportunity' | 'info'
+export type DiagnosisStateValue = 'saudavel' | 'atencao' | 'critico' | 'inconclusivo' | 'sem_dados'
+
+export interface AdFinding {
+  code: string
+  severity: Severity
+  where: string // Campanha Ads, Publicação ou Oferta
+  title: string
+  evidence: string
+  impactBrl: number | null
+}
+
+export interface AdDiagnosis {
+  state: DiagnosisStateValue
+  findings: AdFinding[]
+}
+
+export interface GroupDiagnosis {
+  adGroupId: number
+  title: string
+  diagnosis: AdDiagnosis
+}
+
+export interface CampaignDiagnosis {
+  campaignId: number
+  name: string
+  diagnosis: AdDiagnosis
+  groups: GroupDiagnosis[]
+}
+
+export interface TopFinding {
+  campaignId: number
+  campaignName: string
+  adGroupId: number | null
+  adGroupTitle: string | null
+  finding: AdFinding
+}
+
+// Parâmetros do diagnóstico (editáveis na tela).
+export interface AdsSettings {
+  costBasis: 'tacos' | 'acos'
+  costTargetMinPct: number
+  costTargetMaxPct: number
+  growthCostMaxPct: number
+  criticalCostFactor: number
+  growthMaxSoldUnits: number
+  minImpressionsForCtr: number
+  minClicksForCvr: number
+  ctrLowPct: number
+  cvrLowFactor: number
+  zeroSalesProbability: number
+  roasTargetTolerance: number
+  lostByBudgetHighPct: number
+  lostByRankHighPct: number
+  budgetUnderusePct: number
+  trendChangePct: number
+}
+
+export interface AdsDiagnosisResponse {
+  from: string
+  to: string
+  settings: AdsSettings
+  medianCvr: number | null
+  cvrSampleGroups: number
+  campaigns: CampaignDiagnosis[]
+  top: TopFinding[]
 }
 
 export interface AdsSyncResult {

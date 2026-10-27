@@ -67,6 +67,7 @@ builder.Services.AddScoped<ListingAdvisor>();
 // Product Ads: cliente (somente leitura, via HttpClient "MercadoLivre") e sincronização para o banco local.
 builder.Services.AddSingleton<AdsClient>();
 builder.Services.AddScoped<AdsSyncService>();
+builder.Services.AddScoped<AdsSettingsService>();
 
 // FASE 2: PIPELINE
 // Build() fecha o registro de serviços e cria a aplicação ("app").

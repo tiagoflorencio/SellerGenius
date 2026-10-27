@@ -2,6 +2,8 @@ import type {
   AdCampaignDetail,
   AdsOverview,
   AdsSyncResult,
+  AdsDiagnosisResponse,
+  AdsSettings,
   Diagnosis,
   DraftReport,
   Listing,
@@ -51,4 +53,12 @@ export const api = {
   adsCampaign: (id: number, days: number) => request<AdCampaignDetail>(`/ads/campaigns/${id}?days=${days}`),
   adsSync: (days: number) => request<AdsSyncResult>(`/ads/sync?days=${days}`, { method: 'POST' }),
   adsByListing: () => request<ListingAds[]>('/ads/by-listing'),
+  adsDiagnosis: (days: number) => request<AdsDiagnosisResponse>(`/ads/diagnosis?days=${days}`),
+  adsSettings: () => request<AdsSettings>('/ads/settings'),
+  saveAdsSettings: (settings: AdsSettings) =>
+    request<AdsSettings>('/ads/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    }),
 }

@@ -132,6 +132,76 @@ namespace AgentOffice.Api.Data.Migrations
                     b.ToTable("AdCampaignDaily");
                 });
 
+            modelBuilder.Entity("AgentOffice.Api.Data.AdCampaignSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AutomaticBudget")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Budget")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CampaignId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("RoasTarget")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Strategy")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("AdCampaignSnapshots");
+                });
+
+            modelBuilder.Entity("AgentOffice.Api.Data.AdChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CampaignId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("DetectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NewValue")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OldValue")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId", "DetectedAt");
+
+                    b.ToTable("AdChanges");
+                });
+
             modelBuilder.Entity("AgentOffice.Api.Data.AdGroupMetric", b =>
                 {
                     b.Property<long>("AdGroupId")
@@ -209,6 +279,23 @@ namespace AgentOffice.Api.Data.Migrations
                     b.HasKey("AdGroupId");
 
                     b.ToTable("AdGroupMetrics");
+                });
+
+            modelBuilder.Entity("AgentOffice.Api.Data.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ValueJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
                 });
 
             modelBuilder.Entity("AgentOffice.Api.Data.CategoryInfo", b =>

@@ -31,6 +31,8 @@ public class AdsSyncService(AdsClient ads, AgentOfficeDb db, ILogger<AdsSyncServ
 
         var campaigns = await db.AdCampaigns.ToDictionaryAsync(c => c.CampaignId, ct);
         var groups = await db.AdGroupMetrics.ToDictionaryAsync(g => g.AdGroupId, ct);
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var todaySnapshots = await db.AdCampaignSnapshots.Where(s => s.Date == today).ToDictionaryAsync(s => s.CampaignId, ct);
 
         foreach (var advertiser in advertisers)
         {
@@ -38,14 +40,18 @@ public class AdsSyncService(AdsClient ads, AgentOfficeDb db, ILogger<AdsSyncServ
             {
                 var id = raw.GetProperty("id").GetInt64();
 
-                if (!campaigns.TryGetValue(id, out var campaign))
+                var isNew = !campaigns.TryGetValue(id, out var campaign);
+                if (isNew)
                 {
                     campaign = new AdCampaign { CampaignId = id };
                     campaigns[id] = campaign;
                     db.AdCampaigns.Add(campaign);
                 }
 
-                campaign.AdvertiserId = advertiser.AdvertiserId;
+                // Estado anterior, para detectar o que mudou desde a última sincronização.
+                var before = isNew ? null : CampaignState.From(campaign!);
+
+                campaign!.AdvertiserId = advertiser.AdvertiserId;
                 campaign.SiteId = advertiser.SiteId;
                 campaign.Name = Str(raw, "name") ?? "";
                 campaign.Status = Str(raw, "status") ?? "";
@@ -60,6 +66,9 @@ public class AdsSyncService(AdsClient ads, AgentOfficeDb db, ILogger<AdsSyncServ
                 campaign.SyncedAt = now;
                 campaignCount++;
 
+                if (before is not null) RecordChanges(id, before, CampaignState.From(campaign), now);
+                UpsertSnapshot(campaign, today, todaySnapshots);
+
                 dailyCount += await SyncDailyAsync(advertiser.SiteId, id, from, to, ct);
                 groupCount += await SyncAdGroupsAsync(advertiser, id, from, to, now, groups, ct);
             }
@@ -67,6 +76,53 @@ public class AdsSyncService(AdsClient ads, AgentOfficeDb db, ILogger<AdsSyncServ
 
         await db.SaveChangesAsync(ct);
         return new AdsSyncResult(advertisers.Count, campaignCount, dailyCount, groupCount, from, to);
+    }
+
+    // Campos da configuração da campanha que acompanhamos (o que você pode alterar no Mercado Livre).
+    private record CampaignState(string Status, string? Strategy, decimal Budget, double? RoasTarget, bool AutomaticBudget)
+    {
+        public static CampaignState From(AdCampaign c) => new(c.Status, c.Strategy, c.Budget, c.RoasTarget, c.AutomaticBudget);
+    }
+
+    // Compara o estado anterior com o atual e grava uma linha para cada campo que mudou.
+    private void RecordChanges(long campaignId, CampaignState before, CampaignState after, DateTimeOffset now)
+    {
+        void Add(string field, string? oldValue, string? newValue)
+        {
+            if (oldValue == newValue) return;
+            db.AdChanges.Add(new AdChange
+            {
+                CampaignId = campaignId,
+                DetectedAt = now,
+                Field = field,
+                OldValue = oldValue ?? "",
+                NewValue = newValue ?? "",
+            });
+        }
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        Add("Status", before.Status, after.Status);
+        Add("Strategy", before.Strategy, after.Strategy);
+        Add("Budget", before.Budget.ToString("0.##", inv), after.Budget.ToString("0.##", inv));
+        Add("RoasTarget", before.RoasTarget?.ToString("0.##", inv), after.RoasTarget?.ToString("0.##", inv));
+        Add("AutomaticBudget", before.AutomaticBudget.ToString(), after.AutomaticBudget.ToString());
+    }
+
+    // Um retrato por campanha e dia (se sincronizar mais de uma vez no dia, o retrato é atualizado).
+    private void UpsertSnapshot(AdCampaign c, DateOnly today, Dictionary<long, AdCampaignSnapshot> todaySnapshots)
+    {
+        if (!todaySnapshots.TryGetValue(c.CampaignId, out var snapshot))
+        {
+            snapshot = new AdCampaignSnapshot { CampaignId = c.CampaignId, Date = today };
+            todaySnapshots[c.CampaignId] = snapshot;
+            db.AdCampaignSnapshots.Add(snapshot);
+        }
+
+        snapshot.Status = c.Status;
+        snapshot.Strategy = c.Strategy;
+        snapshot.Budget = c.Budget;
+        snapshot.RoasTarget = c.RoasTarget;
+        snapshot.AutomaticBudget = c.AutomaticBudget;
     }
 
     // Atualiza (ou cria) uma linha por dia. Falha em uma campanha não derruba as demais.

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
-import type { AdCampaign, AdsOverview } from '../types'
+import type { AdCampaign, AdsDiagnosisResponse, AdsOverview, CampaignDiagnosis } from '../types'
 import {
   formatDateTime,
   formatMoney,
@@ -12,9 +12,15 @@ import {
   strategyLabel,
 } from '../format'
 import AdCampaignDrawer from './AdCampaignDrawer.vue'
+import AdsSettingsDrawer from './AdsSettingsDrawer.vue'
+import FindingList from './FindingList.vue'
+import StateChip from './StateChip.vue'
 
 const days = ref(30)
 const overview = ref<AdsOverview | null>(null)
+const diagnosis = ref<AdsDiagnosisResponse | null>(null)
+const showSettings = ref(false)
+const showAllTop = ref(false)
 const loading = ref(true)
 const syncing = ref(false)
 const error = ref<string | null>(null)
@@ -26,6 +32,8 @@ async function load() {
   error.value = null
   try {
     overview.value = await api.adsCampaigns(days.value)
+    // O diagnóstico é complementar: se falhar, a tela segue com as métricas.
+    diagnosis.value = await api.adsDiagnosis(days.value).catch(() => null)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Não foi possível carregar os dados de Ads.'
   } finally {
@@ -54,6 +62,14 @@ const campaigns = computed(() =>
   (overview.value?.campaigns ?? []).filter((c) => !onlyActive.value || c.status === 'active' || c.metrics.cost > 0),
 )
 const selected = computed(() => overview.value?.campaigns.find((c) => c.id === selectedId.value) ?? null)
+const diagByCampaign = computed(
+  () => new Map<number, CampaignDiagnosis>((diagnosis.value?.campaigns ?? []).map((c) => [c.campaignId, c])),
+)
+
+async function settingsSaved() {
+  showSettings.value = false
+  await load()
+}
 
 // Cor do ROAS em relação à meta da campanha: verde = atingiu, amarelo = perto, vermelho = abaixo.
 function roasTone(c: AdCampaign): 'ok' | 'warn' | 'bad' | '' {
@@ -80,7 +96,8 @@ const t = computed(() => overview.value?.totals ?? null)
         {{ formatShortDate(overview.from) }} a {{ formatShortDate(overview.to) }}
         <template v-if="overview.lastSync"> · sincronizado em {{ formatDateTime(overview.lastSync) }}</template>
       </span>
-      <button class="primary push" :disabled="syncing" @click="sync">
+      <button class="push" @click="showSettings = true">Parâmetros</button>
+      <button class="primary" :disabled="syncing" @click="sync">
         {{ syncing ? 'Sincronizando...' : 'Sincronizar Ads' }}
       </button>
     </div>
@@ -109,11 +126,28 @@ const t = computed(() => overview.value?.totals ?? null)
           <div class="card"><span>Vendas orgânicas</span><strong>{{ formatMoney(t.organicRevenue) }}</strong></div>
         </div>
 
+        <section v-if="diagnosis && diagnosis.top.length" class="top">
+          <h3>Principais achados</h3>
+          <p class="hint">
+            Diagnóstico por regras (sem IA). Referência de conversão da conta:
+            <template v-if="diagnosis.medianCvr !== null">{{ formatPct(diagnosis.medianCvr) }} (mediana de {{ diagnosis.cvrSampleGroups }} anúncios)</template>
+            <template v-else>ainda sem volume suficiente</template>.
+          </p>
+          <div v-for="t in showAllTop ? diagnosis.top : diagnosis.top.slice(0, 5)" :key="t.campaignId + '-' + (t.adGroupId ?? 0) + t.finding.code" class="top-item" @click="selectedId = t.campaignId">
+            <small>{{ t.campaignName }}<template v-if="t.adGroupTitle"> › {{ t.adGroupTitle }}</template></small>
+            <FindingList :findings="[t.finding]" />
+          </div>
+          <button v-if="diagnosis.top.length > 5" @click="showAllTop = !showAllTop">
+            {{ showAllTop ? 'Mostrar menos' : `Mostrar todos (${diagnosis.top.length})` }}
+          </button>
+        </section>
+
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Campanha</th>
+                <th>Diagnóstico</th>
                 <th class="num">Orçamento/dia</th>
                 <th class="num">Uso do orç.</th>
                 <th class="num">Invest.</th>
@@ -137,6 +171,14 @@ const t = computed(() => overview.value?.totals ?? null)
                     {{ strategyLabel[c.strategy ?? ''] ?? c.strategy ?? '' }}
                   </small>
                 </td>
+                <td>
+                  <template v-if="diagByCampaign.get(c.id)">
+                    <StateChip :state="diagByCampaign.get(c.id)!.diagnosis.state" />
+                    <small v-if="diagByCampaign.get(c.id)!.diagnosis.findings.length" class="count">
+                      {{ diagByCampaign.get(c.id)!.diagnosis.findings.length }} achado(s)
+                    </small>
+                  </template>
+                </td>
                 <td class="num">{{ formatMoney(c.budget) }}</td>
                 <td class="num">{{ formatPct(c.budgetUsagePct, 0) }}</td>
                 <td class="num">{{ formatMoney(c.metrics.cost) }}</td>
@@ -159,7 +201,7 @@ const t = computed(() => overview.value?.totals ?? null)
                 </td>
               </tr>
               <tr v-if="campaigns.length === 0">
-                <td colspan="13" class="empty">Nenhuma campanha com esses filtros.</td>
+                <td colspan="14" class="empty">Nenhuma campanha com esses filtros.</td>
               </tr>
             </tbody>
           </table>
@@ -171,7 +213,14 @@ const t = computed(() => overview.value?.totals ?? null)
       </template>
     </template>
 
-    <AdCampaignDrawer v-if="selected" :campaign="selected" :days="days" @close="selectedId = null" />
+    <AdCampaignDrawer
+      v-if="selected"
+      :campaign="selected"
+      :days="days"
+      :diagnosis="diagByCampaign.get(selected.id) ?? null"
+      @close="selectedId = null"
+    />
+    <AdsSettingsDrawer v-if="showSettings && diagnosis" :settings="diagnosis.settings" @close="showSettings = false" @saved="settingsSaved" />
   </section>
 </template>
 
@@ -305,5 +354,32 @@ small {
   color: var(--muted);
   font-size: 12px;
   margin-top: 10px;
+}
+.top {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.top h3 {
+  margin: 0;
+}
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 10px;
+}
+.top-item {
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.top-item small {
+  display: block;
+  margin-bottom: 2px;
+}
+.count {
+  display: block;
+  margin-top: 2px;
 }
 </style>

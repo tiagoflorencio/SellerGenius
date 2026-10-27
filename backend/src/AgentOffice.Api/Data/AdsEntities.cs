@@ -1,5 +1,46 @@
 namespace AgentOffice.Api.Data;
 
+// Retrato diário da configuração de uma campanha. O Mercado Livre não guarda o histórico de orçamento/meta,
+// então o guardamos a cada sincronização: é a base para comparar resultados antes e depois de uma mudança.
+public class AdCampaignSnapshot
+{
+    public int Id { get; set; }
+    public long CampaignId { get; set; }
+    public DateOnly Date { get; set; }
+    public string Status { get; set; } = "";
+    public string? Strategy { get; set; }
+    public decimal Budget { get; set; }
+    public double? RoasTarget { get; set; }
+    public bool AutomaticBudget { get; set; }
+}
+
+// Mudança detectada na configuração de uma campanha (feita por você no Mercado Livre; nosso sistema só lê).
+// A data é a da sincronização que percebeu a diferença, então pode ter ocorrido a qualquer momento desde a anterior.
+public class AdChange
+{
+    public int Id { get; set; }
+    public long CampaignId { get; set; }
+    public DateTimeOffset DetectedAt { get; set; }
+
+    // Budget, RoasTarget, Status, Strategy ou AutomaticBudget.
+    public string Field { get; set; } = "";
+    public string OldValue { get; set; } = "";
+    public string NewValue { get; set; } = "";
+
+    // Motivo anotado por você (futuro): alimenta o aprendizado do agente.
+    public string? Note { get; set; }
+}
+
+// Parâmetros e preferências do sistema, em JSON. Ficam no banco (e não no código) para poderem mudar sem novo
+// deploy: você edita e, no futuro, o agente poderá propor ajustes baseados no que aprendeu.
+public class AppSetting
+{
+    // Ex.: "ads.playbook".
+    public string Key { get; set; } = "";
+    public string ValueJson { get; set; } = "";
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 // Campanha de Product Ads (estado atual: orçamento, estratégia, metas). As métricas ficam em AdCampaignDaily.
 public class AdCampaign
 {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
-import type { AdCampaign, AdCampaignDetail } from '../types'
+import type { AdCampaign, AdCampaignDetail, CampaignDiagnosis } from '../types'
 import {
+  formatDateTime,
   formatMoney,
   formatNumber,
   formatPct,
@@ -10,11 +11,14 @@ import {
   formatShortDate,
   strategyLabel,
 } from '../format'
+import FindingList from './FindingList.vue'
 import LineChart from './LineChart.vue'
+import StateChip from './StateChip.vue'
 
 const props = defineProps<{
   campaign: AdCampaign
   days: number
+  diagnosis: CampaignDiagnosis | null
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -53,6 +57,17 @@ const shareSeries = computed(() => [
 
 const typeLabel: Record<string, string> = { ITEM: 'Item', FAMILY: 'Família', CATALOG: 'Catálogo' }
 const m = computed(() => props.campaign.metrics)
+
+// Diagnóstico de cada anúncio da campanha, pelo id.
+const groupDiag = computed(() => new Map((props.diagnosis?.groups ?? []).map((g) => [g.adGroupId, g.diagnosis])))
+
+const fieldLabel: Record<string, string> = {
+  Budget: 'Orçamento',
+  RoasTarget: 'Meta de ROAS',
+  Status: 'Status',
+  Strategy: 'Estratégia',
+  AutomaticBudget: 'Orçamento automático',
+}
 </script>
 
 <template>
@@ -86,6 +101,10 @@ const m = computed(() => props.campaign.metrics)
       <p v-else-if="!detail" class="muted">Carregando...</p>
 
       <template v-else>
+        <h3>Diagnóstico <StateChip v-if="diagnosis" :state="diagnosis.diagnosis.state" /></h3>
+        <FindingList v-if="diagnosis && diagnosis.diagnosis.findings.length" :findings="diagnosis.diagnosis.findings" />
+        <p v-else class="muted">Nenhum achado para esta campanha com os parâmetros atuais.</p>
+
         <h3>Investimento x receita por dia</h3>
         <LineChart :labels="labels" :series="moneySeries" :format="(v) => `R$ ${Math.round(v)}`" />
 
@@ -138,6 +157,10 @@ const m = computed(() => props.campaign.metrics)
                       Publicações: {{ g.listings.slice(0, 2).map((l) => l.itemId).join(', ') }}<template v-if="g.listings.length > 2"> +{{ g.listings.length - 2 }}</template>
                     </small>
                     <small v-else class="linked">Sem publicação ligada no painel</small>
+                    <div v-if="groupDiag.get(g.id)" class="group-diag">
+                      <StateChip :state="groupDiag.get(g.id)!.state" />
+                      <FindingList :findings="groupDiag.get(g.id)!.findings.filter((f) => f.severity !== 'info')" compact />
+                    </div>
                   </div>
                 </td>
                 <td class="num">{{ formatMoney(g.metrics.cost) }}</td>
@@ -154,6 +177,19 @@ const m = computed(() => props.campaign.metrics)
             </tbody>
           </table>
         </div>
+
+        <h3>Alterações detectadas na campanha</h3>
+        <p class="hint">
+          Mudanças de orçamento, meta de ROAS, status ou estratégia percebidas entre sincronizações. A data é a da
+          sincronização que notou; servem de base para comparar o antes e o depois.
+        </p>
+        <ul v-if="detail.changes.length" class="changes">
+          <li v-for="c in detail.changes" :key="c.id">
+            <strong>{{ fieldLabel[c.field] ?? c.field }}</strong>: {{ c.oldValue || '–' }} → {{ c.newValue || '–' }}
+            <small>({{ formatDateTime(c.detectedAt) }})</small>
+          </li>
+        </ul>
+        <p v-else class="muted">Nenhuma alteração detectada desde que o histórico começou a ser guardado.</p>
       </template>
     </aside>
   </div>
@@ -280,5 +316,14 @@ th {
 }
 tr.inactive {
   opacity: 0.55;
+}
+.group-diag {
+  margin-top: 6px;
+}
+.group-diag :deep(.findings) {
+  margin-top: 4px;
+}
+.changes {
+  padding-left: 18px;
 }
 </style>

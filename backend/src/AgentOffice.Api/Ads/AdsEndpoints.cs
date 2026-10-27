@@ -37,6 +37,9 @@ public record LinkedAdGroup(
 
 public record ListingAdView(string ItemId, AdMetrics Metrics, bool Shared, List<LinkedAdGroup> AdGroups);
 
+// Achado de maior prioridade da conta, já com o nome de onde ele ocorre.
+public record TopFinding(long CampaignId, string CampaignName, long? AdGroupId, string? AdGroupTitle, AdFinding Finding);
+
 // Rotas de Product Ads. Todas só locais; só a sincronização conversa com o Mercado Livre (somente leitura).
 public static class AdsEndpoints
 {
@@ -123,6 +126,76 @@ public static class AdsEndpoints
             return Results.Ok(result);
         });
 
+        // GET /ads/settings e PUT /ads/settings: parâmetros do diagnóstico (faixa de custo, volumes mínimos, limites).
+        group.MapGet("/settings", async (AdsSettingsService settings, CancellationToken ct) =>
+            Results.Ok(await settings.GetAsync(ct)));
+
+        group.MapPut("/settings", async (AdsPlaybookSettings body, AdsSettingsService settings, CancellationToken ct) =>
+        {
+            var error = body.Validate();
+            if (error is not null) return Results.BadRequest(new { error });
+
+            await settings.SaveAsync(body, ct);
+            return Results.Ok(body);
+        });
+
+        // GET /ads/diagnosis?days=30: diagnóstico por regras de cada campanha e anúncio de campanha, com evidências.
+        // Lê só o banco local e não chama a IA (gratuito).
+        group.MapGet("/diagnosis", async (AgentOfficeDb db, AdsSettingsService settingsService, CancellationToken ct, int days = 30) =>
+        {
+            var settings = await settingsService.GetAsync(ct);
+            var (from, to) = AdsSyncService.Window(days);
+
+            var campaigns = await db.AdCampaigns.ToListAsync(ct);
+            var daily = (await db.AdCampaignDaily.Where(d => d.Date >= from && d.Date <= to).ToListAsync(ct))
+                .ToLookup(d => d.CampaignId);
+            var groups = (await db.AdGroupMetrics.ToListAsync(ct)).ToLookup(g => g.CampaignId);
+            var keys = await LoadKeysAsync(db, ct);
+            var sold = await db.Listings.ToDictionaryAsync(l => l.ItemId, l => l.SoldQuantity, ct);
+
+            var inputs = campaigns.Select(c => new CampaignInput(
+                c,
+                daily[c.CampaignId].ToList(),
+                groups[c.CampaignId].Select(g =>
+                {
+                    // Maturidade do produto = unidades vendidas somadas das publicações ligadas ao anúncio de campanha.
+                    var linked = keys.Where(k => AdLinker.Matches(g, k)).ToList();
+                    return new GroupInput(g, linked.Sum(k => sold.GetValueOrDefault(k.ItemId)), linked.Count);
+                }).ToList())).ToList();
+
+            var analysis = AdsAnalyzer.Analyze(inputs, settings, from, to);
+
+            static int Rank(string severity) => severity switch
+            {
+                Severity.Critical => 0,
+                Severity.Attention => 1,
+                Severity.Opportunity => 2,
+                _ => 3,
+            };
+
+            var top = analysis.Campaigns
+                .SelectMany(c => c.Diagnosis.Findings
+                    .Select(f => new TopFinding(c.CampaignId, c.Name, null, null, f))
+                    .Concat(c.Groups.SelectMany(g => g.Diagnosis.Findings
+                        .Select(f => new TopFinding(c.CampaignId, c.Name, g.AdGroupId, g.Title, f)))))
+                .Where(t => t.Finding.Severity != Severity.Info)
+                .OrderBy(t => Rank(t.Finding.Severity))
+                .ThenByDescending(t => t.Finding.ImpactBrl ?? 0)
+                .Take(12)
+                .ToList();
+
+            return Results.Ok(new
+            {
+                from,
+                to,
+                settings,
+                analysis.MedianCvr,
+                analysis.CvrSampleGroups,
+                campaigns = analysis.Campaigns,
+                top,
+            });
+        });
+
         // GET /ads/campaigns/{id}?days=30: uma campanha com a série diária e os anúncios dela.
         group.MapGet("/campaigns/{id:long}", async (long id, AgentOfficeDb db, CancellationToken ct, int days = 30) =>
         {
@@ -153,6 +226,9 @@ public static class AdsEndpoints
                 daily = rows.Select(d => new AdDayView(
                     d.Date, AdMetricsCalculator.From(d), d.ImpressionShare, d.LostImpressionShareByBudget, d.LostImpressionShareByRank)),
                 adGroups,
+                changes = (await db.AdChanges.Where(c => c.CampaignId == id).ToListAsync(ct))
+                    .OrderByDescending(c => c.DetectedAt)
+                    .ToList(),
                 // Os anúncios têm o período da última sincronização, que pode diferir do período pedido aqui.
                 adGroupsPeriod = groupEntities.Count == 0 ? null : new { from = groupEntities[0].PeriodFrom, to = groupEntities[0].PeriodTo },
             });
