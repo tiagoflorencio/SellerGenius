@@ -1,0 +1,8 @@
+@AgentOffice.Api_HostAddress = http://localhost:5172
+
+# Arquivo de testes de requisições (extensão REST Client / suporte nativo do VS).
+# Rode a API e clique em "Send Request" acima da linha GET.
+GET {{AgentOffice.Api_HostAddress}}/health
+Accept: application/json
+
+###

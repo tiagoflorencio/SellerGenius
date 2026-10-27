@@ -1,0 +1,22 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+appsettings.Local.json
+
+# Dados locais (banco, tokens, backups): nunca vao para o Git
+App_Data/
+*.db
+*.db-shm
+*.db-wal
+*.bak
+
+# Front-end
+node_modules/
+dist/
+
+# Logs e variaveis de ambiente locais
+*.log
+.env
+.env.*
