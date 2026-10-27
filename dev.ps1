@@ -4,11 +4,13 @@ cada um em sua propria janela do PowerShell (feche a janela para parar o servido
 
   .\dev.ps1            sobe API e painel
   .\dev.ps1 -Tunnel    tambem sobe o tunel (so e necessario para fazer login no Mercado Livre)
+  .\dev.ps1 -Tunnel -TunnelName meu-tunel   usa outro tunel do devtunnel (padrao: agentoffice)
   .\dev.ps1 -Stop      encerra o que estiver rodando nas portas da API e do painel
 #>
 param(
     [switch]$Tunnel,
-    [switch]$Stop
+    [switch]$Stop,
+    [string]$TunnelName = 'agentoffice'
 )
 
 $root = $PSScriptRoot
@@ -65,8 +67,8 @@ if ($Tunnel) {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 
     if (Get-Command devtunnel -ErrorAction SilentlyContinue) {
-        Start-Window 'AgentOffice Tunel' $root 'devtunnel host agentoffice'
-        Write-Host 'Tunel iniciando (devtunnel host agentoffice)'
+        Start-Window 'AgentOffice Tunel' $root "devtunnel host $TunnelName"
+        Write-Host "Tunel iniciando (devtunnel host $TunnelName)"
     } else {
         Write-Host 'devtunnel nao encontrado. Instale com: winget install Microsoft.devtunnel'
     }
