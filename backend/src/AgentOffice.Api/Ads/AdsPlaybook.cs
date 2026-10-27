@@ -40,6 +40,17 @@ public class AdsPlaybookSettings
     public double BudgetUnderusePct { get; set; } = 40;        // uso do orçamento abaixo disso = subutilizado
     public double TrendChangePct { get; set; } = 30;           // variação entre os últimos 7 dias e os 7 anteriores
 
+    // ---- Agente de recomendações ----
+    public int MaxRecommendations { get; set; } = 8;           // máximo de recomendações por análise
+    public int RecentChangeDays { get; set; } = 14;            // campanha alterada há menos que isso aguarda avaliação antes de nova mudança
+
+    // Pesos da prioridade (manual, seção 7). São relativos: o que importa é a proporção entre eles.
+    public double WeightImpact { get; set; } = 35;
+    public double WeightConfidence { get; set; } = 25;
+    public double WeightUrgency { get; set; } = 20;
+    public double WeightEase { get; set; } = 10;
+    public double WeightReversibility { get; set; } = 10;
+
     // Retorna a mensagem do primeiro problema encontrado, ou null se os valores são válidos.
     public string? Validate()
     {
@@ -57,6 +68,11 @@ public class AdsPlaybookSettings
         if (LostByBudgetHighPct is < 0 or > 100 || LostByRankHighPct is < 0 or > 100 || BudgetUnderusePct is < 0 or > 100)
             return "Os percentuais de perda e uso de orçamento devem estar entre 0 e 100.";
         if (TrendChangePct <= 0) return "A variação de tendência deve ser maior que zero.";
+        if (MaxRecommendations is < 1 or > 20) return "O máximo de recomendações deve estar entre 1 e 20.";
+        if (RecentChangeDays is < 0 or > 60) return "Os dias de espera após uma mudança devem estar entre 0 e 60.";
+        if (new[] { WeightImpact, WeightConfidence, WeightUrgency, WeightEase, WeightReversibility }.Any(w => w < 0)
+            || WeightImpact + WeightConfidence + WeightUrgency + WeightEase + WeightReversibility <= 0)
+            return "Os pesos da prioridade não podem ser negativos e a soma deve ser maior que zero.";
         return null;
     }
 }

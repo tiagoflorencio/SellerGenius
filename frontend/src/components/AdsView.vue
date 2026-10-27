@@ -14,6 +14,8 @@ import {
 import AdCampaignDrawer from './AdCampaignDrawer.vue'
 import AdsSettingsDrawer from './AdsSettingsDrawer.vue'
 import FindingList from './FindingList.vue'
+import AdsAdvisorView from './AdsAdvisorView.vue'
+import { activity } from '../activity'
 import StateChip from './StateChip.vue'
 
 const days = ref(30)
@@ -21,6 +23,7 @@ const overview = ref<AdsOverview | null>(null)
 const diagnosis = ref<AdsDiagnosisResponse | null>(null)
 const showSettings = ref(false)
 const showAllTop = ref(false)
+const mode = ref<'overview' | 'agent'>('overview')
 const loading = ref(true)
 const syncing = ref(false)
 const error = ref<string | null>(null)
@@ -84,6 +87,14 @@ const t = computed(() => overview.value?.totals ?? null)
 
 <template>
   <section>
+    <nav class="subtabs">
+      <button :class="{ active: mode === 'overview' }" @click="mode = 'overview'">Métricas e diagnóstico</button>
+      <button :class="{ active: mode === 'agent' }" @click="mode = 'agent'">
+        Agente de Ads
+        <span v-if="activity.adsPending > 0" class="pill">{{ activity.adsPending }}</span>
+      </button>
+    </nav>
+
     <div class="toolbar">
       <label>
         Período
@@ -103,7 +114,8 @@ const t = computed(() => overview.value?.totals ?? null)
     </div>
 
     <p v-if="error" class="banner bad">{{ error }}</p>
-    <p v-if="loading && !overview" class="muted">Carregando...</p>
+    <AdsAdvisorView v-if="mode === 'agent'" :days="days" />
+    <p v-else-if="loading && !overview" class="muted">Carregando...</p>
 
     <template v-else-if="overview">
       <p v-if="overview.campaigns.length === 0" class="muted">
@@ -225,6 +237,25 @@ const t = computed(() => overview.value?.totals ?? null)
 </template>
 
 <style scoped>
+.subtabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.subtabs button.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+.pill {
+  background: var(--warn);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 12px;
+  margin-left: 4px;
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;

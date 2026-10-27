@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, ApiError } from './api'
 import type { Diagnosis, Listing, ListingAds, MlUser, Row, Suggestion } from './types'
 import { formatDateTime, formatNumber, formatPercent } from './format'
+import { activity } from './activity'
 import type { OfficeAgent } from './office'
 import ListingsTable from './components/ListingsTable.vue'
 import SuggestionDrawer from './components/SuggestionDrawer.vue'
@@ -165,16 +166,54 @@ const officeAgents = computed<OfficeAgent[]>(() => {
       color: '#3b5bdb',
       status,
       message,
+      openLabel: 'Abrir painel de anúncios',
+      openTarget: 'dashboard',
+      syncLabel: 'Sincronizar agora',
       details: [
         { label: 'Anúncios ativos', value: String(stats.value.active) },
         { label: 'Com alertas', value: String(stats.value.withAlerts) },
         { label: 'Sugestões pendentes', value: String(pendingCount.value) },
       ],
     },
+    adsAgent(),
   ]
 })
 
+// Agente de Product Ads: trabalha quando a análise está rodando e pede a sua decisão quando há recomendações pendentes.
+function adsAgent(): OfficeAgent {
+  let status: OfficeAgent['status'] = 'idle'
+  let message = 'Pronto para analisar as campanhas'
+
+  if (connected.value === false) {
+    status = 'offline'
+    message = 'Conecte o Mercado Livre'
+  } else if (activity.adsAnalyzing) {
+    status = 'working'
+    message = 'Analisando campanhas...'
+  } else if (activity.adsPending > 0) {
+    status = 'waiting'
+    message = `${activity.adsPending} recomendação(ões) para você`
+  }
+
+  return {
+    id: 'ads',
+    name: 'Ada',
+    role: 'Agente de Product Ads',
+    departmentId: 'marketplaces',
+    seat: 1,
+    color: '#c2255c',
+    status,
+    message,
+    openLabel: 'Abrir Product Ads',
+    openTarget: 'ads',
+    details: [{ label: 'Recomendações pendentes', value: String(activity.adsPending) }],
+  }
+}
+
 onMounted(async () => {
+  // Conta as recomendações pendentes do agente de Ads para o escritório (opcional: ignora falhas).
+  api.adsRecommendations().then((r) => (activity.adsPending = r.pendingTotal)).catch(() => {})
+
   await Promise.all([loadData(), loadConnection()])
   loading.value = false
 })
@@ -221,7 +260,7 @@ onMounted(async () => {
     <OfficeView
       v-else-if="view === 'office'"
       :agents="officeAgents"
-      @open-dashboard="view = 'dashboard'"
+      @open="(agent) => (view = agent.openTarget)"
       @sync="sync"
     />
 

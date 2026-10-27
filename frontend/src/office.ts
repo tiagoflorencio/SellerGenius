@@ -25,6 +25,9 @@ export interface OfficeAgent {
   status: AgentStatus
   message: string // texto do balão de fala
   details: { label: string; value: string }[]
+  openLabel: string // texto do botão que abre a tela do agente
+  openTarget: 'dashboard' | 'ads' // qual tela abre
+  syncLabel?: string // se informado, mostra um botão de sincronizar
 }
 
 export const statusInfo: Record<AgentStatus, { label: string; color: string }> = {

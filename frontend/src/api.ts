@@ -4,6 +4,7 @@ import type {
   AdsSyncResult,
   AdsDiagnosisResponse,
   AdsSettings,
+  RecommendationsResponse,
   Diagnosis,
   DraftReport,
   Listing,
@@ -55,6 +56,16 @@ export const api = {
   adsByListing: () => request<ListingAds[]>('/ads/by-listing'),
   adsDiagnosis: (days: number) => request<AdsDiagnosisResponse>(`/ads/diagnosis?days=${days}`),
   adsSettings: () => request<AdsSettings>('/ads/settings'),
+  adsAnalyze: (days: number) =>
+    request<{ runId: number; recommendations: number }>(`/ads/analyze?days=${days}`, { method: 'POST' }),
+  adsRecommendations: (runId?: number) =>
+    request<RecommendationsResponse>(`/ads/recommendations${runId ? `?runId=${runId}` : ''}`),
+  decideAdsRecommendation: (id: number, decision: 'approve' | 'reject', note: string) =>
+    request<{ id: number; status: string }>(`/ads/recommendations/${id}/decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, note }),
+    }),
   saveAdsSettings: (settings: AdsSettings) =>
     request<AdsSettings>('/ads/settings', {
       method: 'PUT',

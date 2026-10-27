@@ -1,5 +1,72 @@
 namespace AgentOffice.Api.Data;
 
+// Uma execução do agente de Ads. Guarda exatamente o que foi enviado e recebido: é a trilha de auditoria e a base
+// para comparar, no futuro, o que foi recomendado com o que aconteceu depois.
+public class AdAnalysisRun
+{
+    public int Id { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public string Model { get; set; } = "";
+    public DateOnly PeriodFrom { get; set; }
+    public DateOnly PeriodTo { get; set; }
+
+    // Resumo (hash) do manual usado, para saber qual versão do manual gerou cada análise.
+    public string ManualHash { get; set; } = "";
+
+    // Parâmetros vigentes na hora da análise.
+    public string SettingsJson { get; set; } = "";
+
+    // Dados enviados à IA e resposta bruta recebida.
+    public string InputJson { get; set; } = "";
+    public string OutputJson { get; set; } = "";
+
+    public string Summary { get; set; } = "";
+
+    // Qualidade dos dados segundo a IA (JSON: estado, faltantes, alertas) e itens descartados pelas travas do código.
+    public string DataQualityJson { get; set; } = "";
+    public string DiscardedJson { get; set; } = "[]";
+
+    public int? PromptTokens { get; set; }
+    public int? CompletionTokens { get; set; }
+}
+
+// Recomendação do agente. Nasce "Pending"; só você decide. Nada é aplicado no Mercado Livre por este sistema.
+public class AdRecommendation
+{
+    public int Id { get; set; }
+    public int RunId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+
+    // Pending, Approved ou Rejected.
+    public string Status { get; set; } = "Pending";
+
+    // campaign, ad_group ou account.
+    public string Scope { get; set; } = "";
+    public long? CampaignId { get; set; }
+    public long? AdGroupId { get; set; }
+
+    public string Action { get; set; } = "";
+    public string Where { get; set; } = "";
+    public string Title { get; set; } = "";
+
+    // Prioridade de 0 a 100, calculada pelo código (não pela IA) com os pesos dos parâmetros.
+    public double Priority { get; set; }
+    public string Confidence { get; set; } = "";
+    public decimal? ImpactBrl { get; set; }
+    public bool ImpactUnknown { get; set; }
+
+    // Códigos dos achados por regras que motivaram a recomendação, separados por vírgula.
+    public string FindingCodes { get; set; } = "";
+
+    // Recomendação completa (texto da IA + notas de prioridade) em JSON.
+    public string ContentJson { get; set; } = "";
+
+    public DateTimeOffset? DecidedAt { get; set; }
+
+    // Motivo da sua decisão. Recusas explicadas valem ouro para o aprendizado do agente.
+    public string? DecisionNote { get; set; }
+}
+
 // Retrato diário da configuração de uma campanha. O Mercado Livre não guarda o histórico de orçamento/meta,
 // então o guardamos a cada sincronização: é a base para comparar resultados antes e depois de uma mudança.
 public class AdCampaignSnapshot

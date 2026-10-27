@@ -56,6 +56,18 @@ const groups = [
       { key: 'trendChangePct', label: 'Variação semanal relevante (%)', hint: 'Últimos 7 dias contra os 7 anteriores.' },
     ],
   },
+  {
+    title: 'Agente de recomendações',
+    fields: [
+      { key: 'maxRecommendations', label: 'Máximo de recomendações por análise', hint: '' },
+      { key: 'recentChangeDays', label: 'Dias de espera após mudar uma campanha', hint: 'Campanha alterada há menos que isso não recebe nova mudança de configuração: aguarda a avaliação.' },
+      { key: 'weightImpact', label: 'Peso: impacto', hint: 'Pesos da prioridade (relativos entre si). Padrão do manual: 35 / 25 / 20 / 10 / 10.' },
+      { key: 'weightConfidence', label: 'Peso: confiança', hint: '' },
+      { key: 'weightUrgency', label: 'Peso: urgência', hint: '' },
+      { key: 'weightEase', label: 'Peso: facilidade', hint: '' },
+      { key: 'weightReversibility', label: 'Peso: reversibilidade', hint: '' },
+    ],
+  },
 ] as const
 </script>
 

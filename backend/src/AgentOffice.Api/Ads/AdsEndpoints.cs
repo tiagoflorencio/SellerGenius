@@ -141,29 +141,11 @@ public static class AdsEndpoints
 
         // GET /ads/diagnosis?days=30: diagnóstico por regras de cada campanha e anúncio de campanha, com evidências.
         // Lê só o banco local e não chama a IA (gratuito).
-        group.MapGet("/diagnosis", async (AgentOfficeDb db, AdsSettingsService settingsService, CancellationToken ct, int days = 30) =>
+        group.MapGet("/diagnosis", async (AdsDiagnosisService diagnosisService, CancellationToken ct, int days = 30) =>
         {
-            var settings = await settingsService.GetAsync(ct);
-            var (from, to) = AdsSyncService.Window(days);
-
-            var campaigns = await db.AdCampaigns.ToListAsync(ct);
-            var daily = (await db.AdCampaignDaily.Where(d => d.Date >= from && d.Date <= to).ToListAsync(ct))
-                .ToLookup(d => d.CampaignId);
-            var groups = (await db.AdGroupMetrics.ToListAsync(ct)).ToLookup(g => g.CampaignId);
-            var keys = await LoadKeysAsync(db, ct);
-            var sold = await db.Listings.ToDictionaryAsync(l => l.ItemId, l => l.SoldQuantity, ct);
-
-            var inputs = campaigns.Select(c => new CampaignInput(
-                c,
-                daily[c.CampaignId].ToList(),
-                groups[c.CampaignId].Select(g =>
-                {
-                    // Maturidade do produto = unidades vendidas somadas das publicações ligadas ao anúncio de campanha.
-                    var linked = keys.Where(k => AdLinker.Matches(g, k)).ToList();
-                    return new GroupInput(g, linked.Sum(k => sold.GetValueOrDefault(k.ItemId)), linked.Count);
-                }).ToList())).ToList();
-
-            var analysis = AdsAnalyzer.Analyze(inputs, settings, from, to);
+            var context = await diagnosisService.BuildAsync(days, ct);
+            var analysis = context.Analysis;
+            var (from, to, settings) = (context.From, context.To, context.Settings);
 
             static int Rank(string severity) => severity switch
             {
@@ -240,7 +222,7 @@ public static class AdsEndpoints
             .Select(d => new ListingKeys(d.ItemId, d.FamilyId, d.CatalogProductId))
             .ToListAsync(ct);
 
-    private static AdCampaignView BuildView(AdCampaign c, List<AdCampaignDaily> rows, DateOnly from, DateOnly to)
+    internal static AdCampaignView BuildView(AdCampaign c, List<AdCampaignDaily> rows, DateOnly from, DateOnly to)
     {
         var metrics = AdMetricsCalculator.From(rows);
         var windowDays = to.DayNumber - from.DayNumber + 1;

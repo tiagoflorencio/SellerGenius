@@ -243,6 +243,13 @@ export interface AdsSettings {
   lostByRankHighPct: number
   budgetUnderusePct: number
   trendChangePct: number
+  maxRecommendations: number
+  recentChangeDays: number
+  weightImpact: number
+  weightConfidence: number
+  weightUrgency: number
+  weightEase: number
+  weightReversibility: number
 }
 
 export interface AdsDiagnosisResponse {
@@ -253,6 +260,83 @@ export interface AdsDiagnosisResponse {
   cvrSampleGroups: number
   campaigns: CampaignDiagnosis[]
   top: TopFinding[]
+}
+
+// ---- Agente de Ads (IA) ----
+export type RecommendationStatus = 'Pending' | 'Approved' | 'Rejected'
+
+export interface RecommendationContent {
+  titulo: string
+  diagnostico: string
+  evidencias: string[]
+  hipoteses: string[]
+  teste_sugerido: {
+    mudanca: string | null
+    magnitude: string | null
+    janela_avaliacao_dias: number | null
+    metrica_sucesso: string | null
+    criterio: string | null
+  } | null
+  efeito_esperado: string | null
+  riscos: string[]
+  confianca: string
+  // Notas (0 a 100) que formam a prioridade, calculadas pelo código.
+  pontuacao: { impact: number; confidence: number; urgency: number; ease: number; reversibility: number }
+  achados: AdFinding[]
+}
+
+export interface AdRecommendation {
+  id: number
+  status: RecommendationStatus
+  scope: string
+  campaignId: number | null
+  campaignName: string | null
+  adGroupId: number | null
+  adGroupTitle: string | null
+  action: string
+  where: string
+  title: string
+  priority: number
+  confidence: string
+  impactBrl: number | null
+  impactUnknown: boolean
+  findingCodes: string[]
+  content: RecommendationContent
+  decidedAt: string | null
+  decisionNote: string | null
+}
+
+export interface AdAnalysisRunView {
+  id: number
+  createdAt: string
+  model: string
+  periodFrom: string
+  periodTo: string
+  manualHash: string
+  summary: string
+  dataQuality: {
+    estado?: string | null
+    faltantes?: string[]
+    alertas?: string[]
+    naoRecomendado?: { tema: string | null; motivo: string | null }[]
+  }
+  discarded: { title: string; reason: string }[]
+  promptTokens: number | null
+  completionTokens: number | null
+}
+
+export interface RunSummary {
+  id: number
+  createdAt: string
+  recommendations: number
+  pending: number
+}
+
+export interface RecommendationsResponse {
+  run: AdAnalysisRunView | null
+  recommendations: AdRecommendation[]
+  runs: RunSummary[]
+  pendingTotal: number
 }
 
 export interface AdsSyncResult {

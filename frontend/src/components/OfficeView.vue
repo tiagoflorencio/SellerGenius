@@ -18,7 +18,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  openDashboard: [agentId: string]
+  open: [agent: OfficeAgent]
   sync: []
 }>()
 
@@ -154,9 +154,13 @@ const legend = Object.values(statusInfo)
         </div>
       </dl>
       <div class="card-actions">
-        <button class="primary" @click="emit('openDashboard', selected.id)">Abrir painel de anúncios</button>
-        <button :disabled="selected.status === 'working' || selected.status === 'offline'" @click="emit('sync')">
-          Sincronizar agora
+        <button class="primary" @click="emit('open', selected)">{{ selected.openLabel }}</button>
+        <button
+          v-if="selected.syncLabel"
+          :disabled="selected.status === 'working' || selected.status === 'offline'"
+          @click="emit('sync')"
+        >
+          {{ selected.syncLabel }}
         </button>
       </div>
     </div>

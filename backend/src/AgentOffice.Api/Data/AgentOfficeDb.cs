@@ -131,6 +131,8 @@ public class AgentOfficeDb(DbContextOptions<AgentOfficeDb> options) : DbContext(
     public DbSet<AdCampaignSnapshot> AdCampaignSnapshots => Set<AdCampaignSnapshot>();
     public DbSet<AdChange> AdChanges => Set<AdChange>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+    public DbSet<AdAnalysisRun> AdAnalysisRuns => Set<AdAnalysisRun>();
+    public DbSet<AdRecommendation> AdRecommendations => Set<AdRecommendation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,6 +145,7 @@ public class AgentOfficeDb(DbContextOptions<AgentOfficeDb> options) : DbContext(
         modelBuilder.Entity<AppSetting>().HasKey(s => s.Key);
         modelBuilder.Entity<AdCampaignSnapshot>().HasIndex(s => new { s.CampaignId, s.Date }).IsUnique();
         modelBuilder.Entity<AdChange>().HasIndex(c => new { c.CampaignId, c.DetectedAt });
+        modelBuilder.Entity<AdRecommendation>().HasIndex(r => r.RunId);
 
         // Um registro por campanha e dia; o índice único impede duplicar o mesmo dia em sincronizações repetidas.
         modelBuilder.Entity<AdCampaignDaily>().HasIndex(d => new { d.CampaignId, d.Date }).IsUnique();
