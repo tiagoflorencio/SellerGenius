@@ -46,4 +46,10 @@ public class TokenStore(IDataProtectionProvider dataProtection, IWebHostEnvironm
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         File.WriteAllText(_path, _protector.Protect(JsonSerializer.Serialize(tokens)));
     }
+
+    // Esquece o login (desconectar).
+    public void Delete()
+    {
+        if (File.Exists(_path)) File.Delete(_path);
+    }
 }

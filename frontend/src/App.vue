@@ -1,25 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { api, ApiError } from './api'
-import type { Diagnosis, Listing, ListingAds, MlUser, Row, Suggestion } from './types'
+import { api } from './api'
+import type { Diagnosis, IntegrationsStatus, Listing, ListingAds, Page, Row, Suggestion } from './types'
 import { formatDateTime, formatNumber, formatPercent } from './format'
 import { activity } from './activity'
-import type { OfficeAgent } from './office'
+import Icon from './components/Icon.vue'
+import HomeView from './components/HomeView.vue'
 import ListingsTable from './components/ListingsTable.vue'
 import SuggestionDrawer from './components/SuggestionDrawer.vue'
-import OfficeView from './components/OfficeView.vue'
 import AdsView from './components/AdsView.vue'
+import SettingsView from './components/SettingsView.vue'
 
-// Tela atual: o escritório visual, o painel de anúncios ou o Product Ads.
-const view = ref<'office' | 'dashboard' | 'ads'>('office')
+const page = ref<Page>('home')
 
-// ref(): variável reativa. Quando o valor muda, a tela é atualizada sozinha.
 const listings = ref<Listing[]>([])
 const diagnoses = ref<Diagnosis[]>([])
 const suggestions = ref<Suggestion[]>([])
 const adsByListing = ref<ListingAds[]>([])
-const me = ref<MlUser | null>(null)
-const connected = ref<boolean | null>(null) // null = ainda verificando
+const integrations = ref<IntegrationsStatus | null>(null)
+const adsSynced = ref(false)
+const adsAnalyzed = ref(false)
+const flash = ref<{ kind: 'ok' | 'bad'; text: string } | null>(null)
 
 const error = ref<string | null>(null)
 const loading = ref(true)
@@ -28,13 +29,16 @@ const suggestingId = ref<string | null>(null)
 const deciding = ref(false)
 const selectedId = ref<string | null>(null)
 
+const ml = computed(() => integrations.value?.mercadoLivre ?? null)
+const connected = computed(() => ml.value?.connected ?? null) // null = ainda verificando
+
 async function loadData() {
   try {
     ;[listings.value, diagnoses.value, suggestions.value, adsByListing.value] = await Promise.all([
       api.listings(),
       api.diagnosis(),
       api.suggestions(),
-      // Ads é opcional: se ainda não foi sincronizado (ou a API antiga não tem a rota), a tabela segue sem essas colunas.
+      // Ads é opcional: se ainda não foi sincronizado, a tabela segue sem essas colunas.
       api.adsByListing().catch(() => [] as ListingAds[]),
     ])
   } catch {
@@ -42,16 +46,33 @@ async function loadData() {
   }
 }
 
-async function loadConnection() {
+async function loadIntegrations() {
   try {
-    me.value = await api.me()
-    connected.value = true
-  } catch (e) {
-    connected.value = e instanceof ApiError && e.status === 401 ? false : null
+    integrations.value = await api.integrations()
+  } catch {
+    integrations.value = null
   }
 }
 
-// Envolve uma ação: mostra erro na tela se algo falhar.
+// Resumo das campanhas e das análises de Ads, usado na visão geral e nos contadores do menu.
+async function loadAdsSummary() {
+  api.adsRecommendations()
+    .then((r) => {
+      activity.adsPending = r.pendingTotal
+      adsAnalyzed.value = r.run !== null
+    })
+    .catch(() => {})
+  api.adsCampaigns(30)
+    .then((o) => (adsSynced.value = o.lastSync !== null))
+    .catch(() => {})
+}
+
+// Configurações alteradas (credenciais, conexão): recarrega o status e, se conectou, os dados.
+async function settingsChanged() {
+  await loadIntegrations()
+  if (connected.value) await loadData()
+}
+
 async function run(action: () => Promise<void>) {
   error.value = null
   try {
@@ -135,156 +156,150 @@ const lastSync = computed(() =>
   listings.value.length ? listings.value.map((l) => l.syncedAt).sort()[listings.value.length - 1] : null,
 )
 
-// O estado do agente no escritório é derivado dos dados reais (não é só enfeite).
 const pendingCount = computed(() => suggestions.value.filter((s) => s.status === 'Pending').length)
 
-const officeAgents = computed<OfficeAgent[]>(() => {
-  let status: OfficeAgent['status'] = 'idle'
-  let message = 'Pronto para trabalhar'
+const nav = computed(() => [
+  { page: 'home' as Page, label: 'Visão geral', icon: 'home' as const, badge: 0 },
+  { page: 'listings' as Page, label: 'Anúncios', icon: 'tag' as const, badge: pendingCount.value },
+  { page: 'ads' as Page, label: 'Campanhas de Ads', icon: 'megaphone' as const, badge: activity.adsPending },
+  { page: 'settings' as Page, label: 'Configurações', icon: 'settings' as const, badge: 0 },
+])
 
-  if (connected.value === false) {
-    status = 'offline'
-    message = 'Conecte o Mercado Livre'
-  } else if (syncing.value) {
-    status = 'working'
-    message = 'Sincronizando anúncios...'
-  } else if (suggestingId.value) {
-    status = 'working'
-    message = 'Analisando um anúncio...'
-  } else if (pendingCount.value > 0) {
-    status = 'waiting'
-    message = `${pendingCount.value} sugestão(ões) para você`
+const heading = computed(() => {
+  switch (page.value) {
+    case 'listings':
+      return {
+        title: 'Anúncios',
+        subtitle:
+          'Diagnóstico e sugestões com IA' +
+          (lastSync.value ? ` · última sincronização ${formatDateTime(lastSync.value)}` : ''),
+      }
+    case 'ads':
+      return { title: 'Campanhas de Ads', subtitle: 'Métricas, diagnóstico, recomendações do agente e diário de mudanças' }
+    case 'settings':
+      return { title: 'Configurações', subtitle: 'Integrações e credenciais' }
+    default:
+      return { title: 'Visão geral', subtitle: 'O que precisa da sua atenção hoje' }
   }
-
-  return [
-    {
-      id: 'anuncios',
-      name: 'Ana',
-      role: 'Agente de anúncios',
-      departmentId: 'marketplaces',
-      seat: 0,
-      color: '#3b5bdb',
-      status,
-      message,
-      openLabel: 'Abrir painel de anúncios',
-      openTarget: 'dashboard',
-      syncLabel: 'Sincronizar agora',
-      details: [
-        { label: 'Anúncios ativos', value: String(stats.value.active) },
-        { label: 'Com alertas', value: String(stats.value.withAlerts) },
-        { label: 'Sugestões pendentes', value: String(pendingCount.value) },
-      ],
-    },
-    adsAgent(),
-  ]
 })
 
-// Agente de Product Ads: trabalha quando a análise está rodando e pede a sua decisão quando há recomendações pendentes.
-function adsAgent(): OfficeAgent {
-  let status: OfficeAgent['status'] = 'idle'
-  let message = 'Pronto para analisar as campanhas'
-
-  if (connected.value === false) {
-    status = 'offline'
-    message = 'Conecte o Mercado Livre'
-  } else if (activity.adsAnalyzing) {
-    status = 'working'
-    message = 'Analisando campanhas...'
-  } else if (activity.adsPending > 0) {
-    status = 'waiting'
-    message = `${activity.adsPending} recomendação(ões) para você`
-  }
-
-  return {
-    id: 'ads',
-    name: 'Ada',
-    role: 'Agente de Product Ads',
-    departmentId: 'marketplaces',
-    seat: 1,
-    color: '#c2255c',
-    status,
-    message,
-    openLabel: 'Abrir Product Ads',
-    openTarget: 'ads',
-    details: [{ label: 'Recomendações pendentes', value: String(activity.adsPending) }],
-  }
-}
-
 onMounted(async () => {
-  // Conta as recomendações pendentes do agente de Ads para o escritório (opcional: ignora falhas).
-  api.adsRecommendations().then((r) => (activity.adsPending = r.pendingTotal)).catch(() => {})
+  // Retorno do login do Mercado Livre (/?ml=connected ou /?ml=error&message=...): abre as Configurações com o resultado.
+  const params = new URLSearchParams(window.location.search)
+  const result = params.get('ml')
+  if (result) {
+    page.value = 'settings'
+    flash.value =
+      result === 'connected'
+        ? { kind: 'ok', text: 'Conta do Mercado Livre conectada com sucesso.' }
+        : { kind: 'bad', text: params.get('message') ?? 'Não foi possível conectar ao Mercado Livre.' }
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 
-  await Promise.all([loadData(), loadConnection()])
+  await Promise.all([loadData(), loadIntegrations()])
+  loadAdsSummary()
   loading.value = false
 })
 </script>
 
 <template>
-  <div class="page">
-    <header class="top">
-      <div>
-        <h1>AgentOffice</h1>
-        <p class="subtitle">
-          Agente de anúncios
-          <template v-if="me"> · conta {{ me.nickname }}</template>
-          <template v-if="lastSync"> · última sincronização {{ formatDateTime(lastSync) }}</template>
-        </p>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">A</span>
+        <div>
+          <strong>AgentOffice</strong>
+          <small>Gestão com IA</small>
+        </div>
       </div>
-      <div class="top-actions">
-        <span class="badge ok">Somente leitura no Mercado Livre</span>
-        <button class="primary" :disabled="syncing || connected === false" @click="sync">
+
+      <nav>
+        <button v-for="item in nav" :key="item.page" :class="{ active: page === item.page }" @click="page = item.page">
+          <Icon :name="item.icon" />
+          <span>{{ item.label }}</span>
+          <b v-if="item.badge > 0" class="badge-count">{{ item.badge }}</b>
+        </button>
+      </nav>
+
+      <div class="status">
+        <div class="status-row">
+          <i class="dot" :class="connected === null ? 'wait' : connected ? 'on' : 'off'"></i>
+          <div>
+            <strong>Mercado Livre</strong>
+            <small v-if="connected && ml?.account">{{ ml.account.nickname }}</small>
+            <small v-else-if="connected">Conectado</small>
+            <small v-else-if="connected === false">Não conectado</small>
+            <small v-else>Verificando...</small>
+          </div>
+        </div>
+        <small class="ro">Acesso somente leitura</small>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h1>{{ heading.title }}</h1>
+          <p>{{ heading.subtitle }}</p>
+        </div>
+        <button v-if="page === 'listings'" class="primary" :disabled="syncing || connected !== true" @click="sync">
           {{ syncing ? 'Sincronizando...' : 'Sincronizar anúncios' }}
         </button>
+      </header>
+
+      <div class="content">
+        <div v-if="connected === false && (page === 'listings' || page === 'ads')" class="banner warn">
+          <Icon name="alert" />
+          <span>Conecte sua conta do Mercado Livre para sincronizar anúncios e campanhas.</span>
+          <button @click="page = 'settings'">Ir para Configurações</button>
+        </div>
+        <div v-if="error && page !== 'settings'" class="banner bad">
+          <Icon name="alert" />
+          <span>{{ error }}</span>
+        </div>
+
+        <SettingsView v-if="page === 'settings'" :status="integrations" :flash="flash" @changed="settingsChanged" />
+
+        <AdsView v-else-if="page === 'ads'" />
+
+        <p v-else-if="loading" class="muted">Carregando...</p>
+
+        <HomeView
+          v-else-if="page === 'home'"
+          :status="integrations"
+          :listings-count="listings.length"
+          :active-listings="stats.active"
+          :with-alerts="stats.withAlerts"
+          :suggestions-pending="pendingCount"
+          :ads-pending="activity.adsPending"
+          :ads-synced="adsSynced"
+          :ads-analyzed="adsAnalyzed"
+          @go="(p) => (page = p)"
+        />
+
+        <template v-else>
+          <section class="cards">
+            <div class="card"><span>Anúncios ativos</span><strong>{{ stats.active }}</strong></div>
+            <div class="card"><span>Visitas (30 dias)</span><strong>{{ formatNumber(stats.visits) }}</strong></div>
+            <div class="card"><span>Vendas (30 dias)</span><strong>{{ formatNumber(stats.sales) }}</strong></div>
+            <div class="card"><span>Conversão geral</span><strong>{{ formatPercent(stats.conversion) }}</strong></div>
+            <div class="card"><span>Com alertas</span><strong>{{ stats.withAlerts }}</strong></div>
+          </section>
+
+          <p v-if="listings.length === 0" class="muted">
+            Nenhum anúncio salvo ainda. Clique em "Sincronizar anúncios".
+          </p>
+
+          <ListingsTable
+            v-else
+            :rows="rows"
+            :suggesting-id="suggestingId"
+            @suggest="suggest"
+            @open="(row) => (selectedId = row.itemId)"
+          />
+        </template>
       </div>
-    </header>
-
-    <div v-if="connected === false" class="banner warn">
-      Você ainda não conectou sua conta do Mercado Livre.
-      <a href="/api/auth/login">Conectar agora</a>
     </div>
-    <div v-if="error" class="banner bad">{{ error }}</div>
-
-    <nav class="tabs">
-      <button :class="{ active: view === 'office' }" @click="view = 'office'">Escritório</button>
-      <button :class="{ active: view === 'dashboard' }" @click="view = 'dashboard'">
-        Painel de anúncios
-        <span v-if="pendingCount > 0" class="pill">{{ pendingCount }}</span>
-      </button>
-      <button :class="{ active: view === 'ads' }" @click="view = 'ads'">Product Ads</button>
-    </nav>
-
-    <AdsView v-if="view === 'ads'" />
-
-    <p v-else-if="loading" class="muted">Carregando...</p>
-
-    <OfficeView
-      v-else-if="view === 'office'"
-      :agents="officeAgents"
-      @open="(agent) => (view = agent.openTarget)"
-      @sync="sync"
-    />
-
-    <template v-else>
-      <section class="cards">
-        <div class="card"><span>Anúncios ativos</span><strong>{{ stats.active }}</strong></div>
-        <div class="card"><span>Visitas (30 dias)</span><strong>{{ formatNumber(stats.visits) }}</strong></div>
-        <div class="card"><span>Vendas (30 dias)</span><strong>{{ formatNumber(stats.sales) }}</strong></div>
-        <div class="card"><span>Conversão geral</span><strong>{{ formatPercent(stats.conversion) }}</strong></div>
-        <div class="card"><span>Com alertas</span><strong>{{ stats.withAlerts }}</strong></div>
-      </section>
-
-      <p v-if="listings.length === 0" class="muted">
-        Nenhum anúncio salvo ainda. Clique em "Sincronizar anúncios".
-      </p>
-
-      <ListingsTable
-        v-else
-        :rows="rows"
-        :suggesting-id="suggestingId"
-        @suggest="suggest"
-        @open="(row) => (selectedId = row.itemId)"
-      />
-    </template>
 
     <SuggestionDrawer
       v-if="selectedRow"
@@ -297,63 +312,153 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px;
+.shell {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  min-height: 100vh;
 }
-.top {
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 14px;
+  background: var(--sidebar);
+  color: #cbd5e1;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+}
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+}
+.brand strong {
+  display: block;
+  color: #fff;
+  font-size: 16px;
+}
+.brand small {
+  color: #94a3b8;
+}
+nav {
+  display: grid;
+  gap: 4px;
+}
+nav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+nav button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+}
+nav button.active {
+  background: rgba(99, 102, 241, 0.22);
+  color: #fff;
+}
+nav button span {
+  flex: 1;
+}
+.badge-count {
+  background: #f59e0b;
+  color: #1f2937;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.status {
+  margin-top: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  display: grid;
+  gap: 8px;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status-row strong {
+  display: block;
+  color: #fff;
+  font-size: 13px;
+}
+.status small,
+.ro {
+  color: #94a3b8;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #64748b;
+}
+.dot.on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+.dot.off {
+  background: #f59e0b;
+}
+.main {
+  min-width: 0;
+}
+.topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 18px;
+  padding: 22px 32px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
 }
-h1 {
+.topbar h1 {
   margin: 0;
+  font-size: 22px;
 }
-.tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 16px;
-}
-.tabs button.active {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-  font-weight: 600;
-}
-.pill {
-  background: var(--warn);
-  color: #fff;
-  border-radius: 999px;
-  padding: 1px 7px;
-  font-size: 12px;
-  margin-left: 4px;
-}
-.subtitle,
-.muted {
+.topbar p {
   margin: 2px 0 0;
   color: var(--muted);
 }
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.content {
+  padding: 24px 32px 48px;
+  max-width: 1360px;
 }
-.badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-}
-.badge.ok {
-  background: var(--ok-soft);
-  color: var(--ok);
+.muted {
+  color: var(--muted);
 }
 .banner {
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.banner span {
+  flex: 1;
 }
 .banner.warn {
   background: var(--warn-soft);
@@ -366,23 +471,53 @@ h1 {
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 14px 18px;
 }
 .card span {
   display: block;
   color: var(--muted);
   font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 .card strong {
   font-size: 26px;
+}
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  nav button {
+    width: auto;
+  }
+  .status {
+    margin: 0 0 0 auto;
+  }
+  .topbar,
+  .content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
 }
 </style>

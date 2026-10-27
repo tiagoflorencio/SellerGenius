@@ -65,6 +65,24 @@ export interface MlUser {
   siteId: string
 }
 
+// Telas do menu lateral.
+export type Page = 'home' | 'listings' | 'ads' | 'settings'
+
+// Situação das integrações (tela de Configurações). A chave secreta nunca é devolvida pela API.
+export interface IntegrationsStatus {
+  mercadoLivre: {
+    configured: boolean
+    source: 'ui' | 'config' | 'none'
+    appId: string
+    hasSecret: boolean
+    redirectUri: string
+    connected: boolean
+    account: MlUser | null
+    accountError: string | null
+  }
+  openAi: { configured: boolean; model: string }
+}
+
 // Anúncio + diagnóstico + última sugestão + publicidade, já juntos para a tabela.
 export interface Row extends Listing {
   conversion: number | null

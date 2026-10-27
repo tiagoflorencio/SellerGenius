@@ -44,6 +44,7 @@ builder.Services
 
 // Singleton: uma única instância durante toda a vida da API (o AuthService guarda os "states" do login em memória).
 builder.Services.AddSingleton<TokenStore>();
+builder.Services.AddSingleton<MercadoLivreCredentialsStore>();
 builder.Services.AddSingleton<MercadoLivreAuthService>();
 builder.Services.AddSingleton<MercadoLivreClient>();
 
@@ -107,6 +108,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
 
 // Rotas do Mercado Livre (/auth/login, /auth/callback, /ml/me), definidas em MercadoLivre/MercadoLivreEndpoints.cs.
 app.MapMercadoLivreEndpoints();
+
+// Rotas da tela de Configurações (/settings/...), definidas em MercadoLivre/IntegrationEndpoints.cs.
+app.MapIntegrationEndpoints();
 
 // Rotas do agente de anúncios (/agent/...), definidas em Ai/AgentEndpoints.cs.
 app.MapAgentEndpoints();

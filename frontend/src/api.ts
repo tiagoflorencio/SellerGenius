@@ -5,6 +5,7 @@ import type {
   AdsDiagnosisResponse,
   AdsSettings,
   DiaryResponse,
+  IntegrationsStatus,
   RecommendationsResponse,
   Diagnosis,
   DraftReport,
@@ -43,8 +44,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 const json = { 'Content-Type': 'application/json' }
 
+// Para rotas que respondem 204 (sem corpo).
+async function requestEmpty(path: string, method: string): Promise<void> {
+  const res = await fetch(`/api${path}`, { method })
+  if (!res.ok) throw new ApiError(res.status, `Erro ${res.status}`)
+}
+
 export const api = {
   me: () => request<MlUser>('/ml/me'),
+  integrations: () => request<IntegrationsStatus>('/settings/integrations'),
+  saveMlCredentials: (appId: string, clientSecret: string, redirectUri: string) =>
+    request<{ saved: boolean }>('/settings/mercadolivre/credentials', {
+      method: 'PUT',
+      headers: json,
+      body: JSON.stringify({ appId, clientSecret, redirectUri }),
+    }),
+  mlConnect: () => request<{ url: string }>('/settings/mercadolivre/connect', { method: 'POST' }),
+  mlDisconnect: () => requestEmpty('/settings/mercadolivre/disconnect', 'POST'),
+  deleteMlCredentials: () => requestEmpty('/settings/mercadolivre/credentials', 'DELETE'),
   listings: () => request<Listing[]>('/listings'),
   draft: (itemId: string) => request<DraftReport>(`/listings/${itemId}/draft`),
   diagnosis: () => request<Diagnosis[]>('/agent/diagnosis'),

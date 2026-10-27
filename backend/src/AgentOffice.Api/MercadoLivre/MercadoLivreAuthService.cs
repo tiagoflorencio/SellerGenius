@@ -21,6 +21,7 @@ public record TokenResponse(
 public class MercadoLivreAuthService(
     IHttpClientFactory httpClientFactory,
     IOptions<MercadoLivreOptions> options,
+    MercadoLivreCredentialsStore credentials,
     TokenStore store)
 {
     private readonly MercadoLivreOptions _options = options.Value;
@@ -35,14 +36,24 @@ public class MercadoLivreAuthService(
     // Passo 1: URL para onde o usuário é enviado para autorizar o app.
     public string BuildAuthorizationUrl()
     {
+        var creds = RequireCredentials();
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         _pendingStates[state] = DateTimeOffset.UtcNow.AddMinutes(10);
 
         return $"{_options.AuthBaseUrl}/authorization" +
                $"?response_type=code" +
-               $"&client_id={Uri.EscapeDataString(_options.AppId)}" +
-               $"&redirect_uri={Uri.EscapeDataString(_options.RedirectUri)}" +
+               $"&client_id={Uri.EscapeDataString(creds.AppId)}" +
+               $"&redirect_uri={Uri.EscapeDataString(creds.RedirectUri)}" +
                $"&state={state}";
+    }
+
+    // As credenciais podem mudar na tela de Configurações, então são lidas a cada uso.
+    private ResolvedCredentials RequireCredentials()
+    {
+        var creds = credentials.Resolve();
+        if (!creds.IsComplete)
+            throw new InvalidOperationException("Informe o App ID, a chave secreta e a URL de redirecionamento em Configurações.");
+        return creds;
     }
 
     // Passo 2: chamado pelo /auth/callback. Valida o state e troca o code por tokens.
@@ -54,13 +65,14 @@ public class MercadoLivreAuthService(
             throw new InvalidOperationException("State inválido ou expirado. Inicie o login novamente.");
         }
 
+        var creds = RequireCredentials();
         var tokens = await RequestTokensAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
-            ["client_id"] = _options.AppId,
-            ["client_secret"] = _options.ClientSecret,
+            ["client_id"] = creds.AppId,
+            ["client_secret"] = creds.ClientSecret,
             ["code"] = code,
-            ["redirect_uri"] = _options.RedirectUri,
+            ["redirect_uri"] = creds.RedirectUri,
         }, ct);
 
         store.Save(tokens);
@@ -80,11 +92,12 @@ public class MercadoLivreAuthService(
                 return tokens.AccessToken;
 
             // Vencido: usa o refresh_token para pegar um novo par de tokens.
+            var creds = RequireCredentials();
             tokens = await RequestTokensAsync(new Dictionary<string, string>
             {
                 ["grant_type"] = "refresh_token",
-                ["client_id"] = _options.AppId,
-                ["client_secret"] = _options.ClientSecret,
+                ["client_id"] = creds.AppId,
+                ["client_secret"] = creds.ClientSecret,
                 ["refresh_token"] = tokens.RefreshToken,
             }, ct);
 

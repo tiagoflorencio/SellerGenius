@@ -1,0 +1,105 @@
+using AgentOffice.Api.Ai;
+using Microsoft.Extensions.Options;
+
+namespace AgentOffice.Api.MercadoLivre;
+
+public record CredentialsRequest(string? AppId, string? ClientSecret, string? RedirectUri);
+
+// Tela de Configurações: o próprio usuário informa as credenciais do app, conecta e desconecta a conta do Mercado Livre.
+// Todas as rotas são só locais e NUNCA devolvem a chave secreta.
+public static class IntegrationEndpoints
+{
+    public static void MapIntegrationEndpoints(this WebApplication app)
+    {
+        var group = app.MapGroup("/settings").AddEndpointFilter(MercadoLivreEndpoints.LocalOnly);
+
+        // GET /settings/integrations: situação de cada integração (credenciais, conexão e conta).
+        group.MapGet("/integrations", async (
+            MercadoLivreCredentialsStore credentials, TokenStore tokens, MercadoLivreClient ml,
+            IOptions<OpenAiOptions> openAi, CancellationToken ct) =>
+        {
+            var creds = credentials.Resolve();
+            var connected = tokens.Load() is not null;
+
+            MercadoLivreUser? account = null;
+            string? accountError = null;
+            if (connected)
+            {
+                try
+                {
+                    account = await ml.GetMeAsync(ct);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
+                {
+                    accountError = "A conexão está salva, mas não foi possível consultar a conta agora. Reconecte se o problema persistir.";
+                }
+            }
+
+            return Results.Ok(new
+            {
+                mercadoLivre = new
+                {
+                    configured = creds.IsComplete,
+                    source = creds.Source,
+                    appId = creds.AppId,
+                    hasSecret = creds.ClientSecret.Length > 0,
+                    redirectUri = creds.RedirectUri,
+                    connected,
+                    account = account is null ? null : new { account.Id, account.Nickname, account.SiteId },
+                    accountError,
+                },
+                openAi = new
+                {
+                    configured = !string.IsNullOrWhiteSpace(openAi.Value.ApiKey),
+                    model = openAi.Value.Model,
+                },
+            });
+        });
+
+        // PUT /settings/mercadolivre/credentials: salva (criptografado) o App ID, a chave secreta e a URL de redirecionamento.
+        // Chave secreta em branco mantém a atual. Trocar de app invalida o login anterior.
+        group.MapPut("/mercadolivre/credentials", (CredentialsRequest body, MercadoLivreCredentialsStore credentials, TokenStore tokens) =>
+        {
+            var current = credentials.Resolve();
+            var appId = (body.AppId ?? "").Trim();
+            var secret = string.IsNullOrWhiteSpace(body.ClientSecret) ? current.ClientSecret : body.ClientSecret.Trim();
+            var redirect = (body.RedirectUri ?? "").Trim();
+
+            var error = MercadoLivreCredentialsValidator.Validate(appId, secret, redirect);
+            if (error is not null) return Results.BadRequest(new { error });
+
+            credentials.Save(new MercadoLivreCredentials(appId, secret, redirect));
+
+            if (appId != current.AppId || secret != current.ClientSecret) tokens.Delete();
+            return Results.Ok(new { saved = true });
+        });
+
+        // DELETE /settings/mercadolivre/credentials: remove as credenciais salvas pela tela e desconecta a conta.
+        group.MapDelete("/mercadolivre/credentials", (MercadoLivreCredentialsStore credentials, TokenStore tokens) =>
+        {
+            credentials.Delete();
+            tokens.Delete();
+            return Results.NoContent();
+        });
+
+        // POST /settings/mercadolivre/connect: devolve o endereço da tela de autorização do Mercado Livre.
+        group.MapPost("/mercadolivre/connect", (MercadoLivreAuthService auth) =>
+        {
+            try
+            {
+                return Results.Ok(new { url = auth.BuildAuthorizationUrl() });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // POST /settings/mercadolivre/disconnect: esquece o login (as credenciais do app continuam salvas).
+        group.MapPost("/mercadolivre/disconnect", (TokenStore tokens) =>
+        {
+            tokens.Delete();
+            return Results.NoContent();
+        });
+    }
+}

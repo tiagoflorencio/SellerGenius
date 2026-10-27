@@ -14,17 +14,31 @@ public static class MercadoLivreEndpoints
         // GET /auth/login: redireciona para a tela de login do Mercado Livre.
         // Só local: você abre https://localhost:7215/auth/login no seu navegador.
         app.MapGet("/auth/login", (MercadoLivreAuthService auth) =>
-                Results.Redirect(auth.BuildAuthorizationUrl()))
+            {
+                try
+                {
+                    return Results.Redirect(auth.BuildAuthorizationUrl());
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new { error = ex.Message });
+                }
+            })
             .AddEndpointFilter(LocalOnly);
 
-        // GET /auth/callback: o Mercado Livre devolve o usuário aqui (via túnel) com ?code=...&state=...
+        // GET /auth/callback: o Mercado Livre devolve o usuário aqui (via túnel ou domínio público) com ?code=...&state=...
         // Esta rota precisa ficar acessível pela internet; a segurança vem do "state" validado.
+        // No fim, volta para o painel (Frontend:Url, definido só por configuração: nunca por parâmetro da requisição).
         app.MapGet("/auth/callback", async (
             string? code, string? state, string? error,
-            MercadoLivreAuthService auth, CancellationToken ct) =>
+            MercadoLivreAuthService auth, IConfiguration config, CancellationToken ct) =>
         {
+            var panel = (config["Frontend:Url"] ?? "http://localhost:5173").TrimEnd('/');
+            IResult Back(string result, string? message = null) =>
+                Results.Redirect($"{panel}/?ml={result}" + (message is null ? "" : $"&message={Uri.EscapeDataString(message)}"));
+
             if (error is not null || string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
-                return Results.BadRequest("Login não autorizado ou parâmetros ausentes.");
+                return Back("error", "Login não autorizado ou parâmetros ausentes.");
 
             try
             {
@@ -32,12 +46,14 @@ public static class MercadoLivreEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                return Back("error", ex.Message);
+            }
+            catch (HttpRequestException)
+            {
+                return Back("error", "Não foi possível falar com o Mercado Livre. Tente novamente.");
             }
 
-            return Results.Content(
-                "<h1>Conectado ao Mercado Livre!</h1><p>Pode fechar esta aba.</p>",
-                "text/html; charset=utf-8");
+            return Back("connected");
         });
 
         // GET /ml/me: teste rápido. Mostra a conta conectada (leitura). Só local.
