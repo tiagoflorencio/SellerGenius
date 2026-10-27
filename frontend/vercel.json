@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://08f50496-2387-40f3-a6c9-6079513f0c6d.devtunnels.ms/:path*" } 
+    { "source": "/api/:path*", "destination": "https://hcx18v20-5172.brs.devtunnels.ms/:path*" } 
   ]
 }
