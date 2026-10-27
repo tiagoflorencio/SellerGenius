@@ -62,6 +62,36 @@ public class MercadoLivreCredentialsStore(
     }
 }
 
+// Monta a URL de redirecionamento sem o usuário precisar entender o processo. Retorna null quando não há endereço público HTTPS.
+public static class RedirectUriSuggester
+{
+    public const string CallbackPath = "/auth/callback";
+
+    // publicUrl: endereço público da API definido por configuração (App:PublicUrl), tem prioridade.
+    // panelOrigin: endereço em que o usuário abriu o painel; o painel encaminha /api para a API.
+    public static string? Suggest(string? publicUrl, string? panelOrigin)
+    {
+        var fromConfig = PublicBase(publicUrl);
+        if (fromConfig is not null) return fromConfig + CallbackPath;
+
+        var fromPanel = PublicBase(panelOrigin);
+        return fromPanel is null ? null : fromPanel + "/api" + CallbackPath;
+    }
+
+    // Aceita só HTTPS com nome de domínio público (nada de localhost, IP ou nomes internos).
+    private static string? PublicBase(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme != Uri.UriSchemeHttps) return null;
+
+        var host = uri.IdnHost.ToLowerInvariant();
+        var internalName = host.EndsWith(".local") || host.EndsWith(".localhost") || host.EndsWith(".internal") || host.EndsWith(".lan");
+        if (!host.Contains('.') || internalName || System.Net.IPAddress.TryParse(host, out _)) return null;
+
+        return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+    }
+}
+
 public static class MercadoLivreCredentialsValidator
 {
     // Retorna a mensagem do primeiro problema encontrado, ou null se os valores são aceitáveis.

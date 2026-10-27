@@ -76,6 +76,7 @@ export interface IntegrationsStatus {
     appId: string
     hasSecret: boolean
     redirectUri: string
+    suggestedRedirectUri: string | null
     connected: boolean
     account: MlUser | null
     accountError: string | null

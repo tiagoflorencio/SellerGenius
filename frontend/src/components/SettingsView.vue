@@ -12,7 +12,8 @@ const emit = defineEmits<{ changed: [] }>()
 
 const appId = ref('')
 const clientSecret = ref('')
-const redirectUri = ref('')
+const advancedRedirect = ref('') // uso avançado: substitui a URL gerada automaticamente
+const copied = ref(false)
 const busy = ref<'save' | 'connect' | 'disconnect' | 'remove' | null>(null)
 const message = ref<{ kind: 'ok' | 'bad'; text: string } | null>(null)
 const dirty = ref(false)
@@ -25,10 +26,18 @@ watch(
   (value) => {
     if (!value || dirty.value) return
     appId.value = value.appId
-    redirectUri.value = value.redirectUri
   },
   { immediate: true },
 )
+
+// URL que o usuário cadastra no aplicativo do Mercado Livre: a informada em "Avançado", a gerada pelo sistema ou a já salva.
+const shownRedirect = computed(() => advancedRedirect.value.trim() || ml.value?.suggestedRedirectUri || ml.value?.redirectUri || '')
+
+async function copyRedirect() {
+  await navigator.clipboard.writeText(shownRedirect.value)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
+}
 
 const stateLabel = computed(() => {
   if (!ml.value) return { text: 'Verificando...', tone: 'muted' }
@@ -55,8 +64,9 @@ const save = () =>
   act(
     'save',
     async () => {
-      await api.saveMlCredentials(appId.value.trim(), clientSecret.value.trim(), redirectUri.value.trim())
+      await api.saveMlCredentials(appId.value.trim(), clientSecret.value.trim(), advancedRedirect.value.trim())
       clientSecret.value = ''
+      advancedRedirect.value = ''
       dirty.value = false
     },
     'Credenciais salvas. Agora clique em "Conectar conta".',
@@ -78,7 +88,7 @@ const removeCredentials = () => {
     async () => {
       await api.deleteMlCredentials()
       appId.value = ''
-      redirectUri.value = ''
+      advancedRedirect.value = ''
       clientSecret.value = ''
       dirty.value = false
     },
@@ -86,7 +96,7 @@ const removeCredentials = () => {
   )
 }
 
-const canSave = computed(() => appId.value.trim() && redirectUri.value.trim() && (clientSecret.value.trim() || ml.value?.hasSecret))
+const canSave = computed(() => appId.value.trim() && shownRedirect.value && (clientSecret.value.trim() || ml.value?.hasSecret))
 </script>
 
 <template>
@@ -117,8 +127,8 @@ const canSave = computed(() => appId.value.trim() && redirectUri.value.trim() &&
       <ol class="steps">
         <li>
           <strong>Crie um aplicativo no Mercado Livre.</strong>
-          Acesse o painel de desenvolvedores (<a href="https://developers.mercadolivre.com.br/" target="_blank" rel="noopener noreferrer">developers.mercadolivre.com.br</a>),
-          crie um aplicativo e cadastre nele a mesma <em>URL de redirecionamento</em> informada abaixo.
+          Acesse o painel de desenvolvedores (<a href="https://developers.mercadolivre.com.br/devcenter" target="_blank" rel="noopener noreferrer">https://developers.mercadolivre.com.br/devcenter</a>),
+          crie um aplicativo e, no campo <em>URIs de redirect</em>, cole a URL de redirecionamento exibida abaixo (use o botão Copiar).
         </li>
         <li><strong>Copie o App ID e a Secret Key</strong> do aplicativo e cole nos campos abaixo.</li>
         <li><strong>Clique em "Conectar conta"</strong> e autorize o acesso na tela do Mercado Livre.</li>
@@ -139,14 +149,36 @@ const canSave = computed(() => appId.value.trim() && redirectUri.value.trim() &&
             @input="dirty = true"
           />
         </label>
-        <label class="wide">
-          URL de redirecionamento (HTTPS)
-          <input v-model="redirectUri" autocomplete="off" placeholder="https://seu-endereco-publico/auth/callback" @input="dirty = true" />
-          <small>
-            O Mercado Livre não aceita <code>http://localhost</code>. Use um endereço HTTPS público que encaminhe para a API
-            desta aplicação (domínio próprio ou um túnel, como o devtunnel) terminando em <code>/auth/callback</code>.
-          </small>
-        </label>
+        <div class="wide redirect">
+          <span class="label">URL de redirecionamento</span>
+          <template v-if="shownRedirect">
+            <div class="copybox">
+              <code>{{ shownRedirect }}</code>
+              <button type="button" @click="copyRedirect">{{ copied ? 'Copiada!' : 'Copiar' }}</button>
+            </div>
+            <small>
+              Gerada automaticamente. Cole-a em <em>URIs de redirect</em> no seu aplicativo do Mercado Livre: é o único
+              dado que precisa ser copiado para lá.
+            </small>
+          </template>
+          <p v-else class="notice warn">
+            Este painel está aberto em um endereço local, e o Mercado Livre só aceita endereços públicos HTTPS. Acesse
+            pelo endereço oficial do sistema ou, para testes no seu computador, use a opção Avançado abaixo.
+          </p>
+          <details class="advanced">
+            <summary>Avançado</summary>
+            <input
+              v-model="advancedRedirect"
+              autocomplete="off"
+              placeholder="https://seu-endereco-publico/auth/callback"
+              @input="dirty = true"
+            />
+            <small>
+              Use outra URL no lugar da gerada (por exemplo, a de um túnel como o devtunnel, terminando em
+              <code>/auth/callback</code>). Deve ser HTTPS e igual à cadastrada no aplicativo.
+            </small>
+          </details>
+        </div>
 
         <p v-if="ml?.source === 'config'" class="muted wide">
           No momento as credenciais vêm da configuração do servidor (user-secrets ou variáveis de ambiente). Ao salvar aqui, elas passam a ser usadas no lugar.
@@ -293,6 +325,40 @@ small {
 }
 .wide {
   grid-column: 1 / -1;
+}
+.redirect {
+  display: grid;
+  gap: 6px;
+}
+.redirect .label {
+  font-weight: 600;
+  font-size: 13px;
+}
+.copybox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--info-soft);
+  border-radius: 10px;
+  padding: 8px 8px 8px 14px;
+}
+.copybox code {
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.advanced input {
+  display: block;
+  margin: 8px 0 4px;
+}
+.notice.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 .actions {
   display: flex;

@@ -52,12 +52,13 @@ async function requestEmpty(path: string, method: string): Promise<void> {
 
 export const api = {
   me: () => request<MlUser>('/ml/me'),
-  integrations: () => request<IntegrationsStatus>('/settings/integrations'),
+  integrations: () => request<IntegrationsStatus>(`/settings/integrations?origin=${encodeURIComponent(window.location.origin)}`),
   saveMlCredentials: (appId: string, clientSecret: string, redirectUri: string) =>
     request<{ saved: boolean }>('/settings/mercadolivre/credentials', {
       method: 'PUT',
       headers: json,
-      body: JSON.stringify({ appId, clientSecret, redirectUri }),
+      // redirectUri em branco = o servidor gera a URL a partir do endereço em que o painel foi aberto.
+      body: JSON.stringify({ appId, clientSecret, redirectUri, panelOrigin: window.location.origin }),
     }),
   mlConnect: () => request<{ url: string }>('/settings/mercadolivre/connect', { method: 'POST' }),
   mlDisconnect: () => requestEmpty('/settings/mercadolivre/disconnect', 'POST'),

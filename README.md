@@ -27,9 +27,11 @@ Sem PowerShell: `dotnet run --launch-profile http` em `backend/src/AgentOffice.A
 
 ## Conectar ao Mercado Livre
 
-1. Crie um aplicativo em <https://developers.mercadolivre.com.br/> e cadastre nele uma URL de redirecionamento **HTTPS** que termine em `/auth/callback` e encaminhe para a API (o Mercado Livre não aceita `http://localhost`; em desenvolvimento use um túnel, como o devtunnel: `.\dev.ps1 -Tunnel`).
-2. No painel, abra **Configurações**, informe App ID, Secret Key e a mesma URL de redirecionamento e salve.
+1. Crie um aplicativo em <https://developers.mercadolivre.com.br/devcenter/> e cole nele, em "URIs de redirect", a URL de redirecionamento exibida em **Configurações** (ela é gerada automaticamente a partir do endereço público HTTPS em que o painel foi aberto, terminando em `/api/auth/callback`; se a API tiver endereço próprio, defina `App:PublicUrl`).
+2. No painel, abra **Configurações**, informe App ID e Secret Key e salve.
 3. Clique em **Conectar conta** e autorize o acesso.
+
+O Mercado Livre não aceita `http://localhost`. Em desenvolvimento local, suba um túnel (por exemplo `.\dev.ps1 -Tunnel`, que usa o devtunnel) e informe a URL dele em **Configurações → Avançado** (`https://seu-tunel/auth/callback`) ou defina `App:PublicUrl`.
 
 As credenciais e os tokens ficam criptografados em `backend/src/AgentOffice.Api/App_Data` (ignorado pelo Git). A chave secreta nunca é devolvida pela API.
 
