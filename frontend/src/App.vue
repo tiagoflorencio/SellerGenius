@@ -237,7 +237,7 @@ onMounted(async () => {
       <div class="brand">
         <span class="brand-mark">A</span>
         <div>
-          <strong>AgentOffice</strong>
+          <strong>SellerGenius</strong>
           <small>Gestão com IA</small>
         </div>
       </div>
