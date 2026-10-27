@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { activity } from '../activity'
 import { api } from '../api'
 import type { AdRecommendation, RecommendationStatus, RecommendationsResponse } from '../types'
-import { formatDateTime, formatMoney, formatNumber } from '../format'
+import { formatDateTime, formatDay, formatMoney, formatNumber, todayIso } from '../format'
 import FindingList from './FindingList.vue'
 
 const props = defineProps<{ days: number }>()
@@ -16,6 +16,23 @@ const filter = ref<'Pending' | 'Approved' | 'Rejected' | 'all'>('Pending')
 const openId = ref<number | null>(null)
 const notes = ref<Record<number, string>>({})
 const deciding = ref<number | null>(null)
+const appliedDates = ref<Record<number, string>>({})
+
+// Ações que não exigem mudança no Mercado Livre não têm "aplicação" para registrar.
+const needsApplication = (r: AdRecommendation) => r.status === 'Approved' && !['no_action', 'collect_more_data'].includes(r.action)
+
+async function setApplied(rec: AdRecommendation, date: string | null) {
+  deciding.value = rec.id
+  error.value = null
+  try {
+    await api.markApplied(rec.id, date)
+    await load(data.value?.run?.id)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Falha ao registrar a aplicação.'
+  } finally {
+    deciding.value = null
+  }
+}
 
 async function load(runId?: number) {
   try {
@@ -69,6 +86,8 @@ const actionLabel: Record<string, string> = {
   increase_budget: 'Aumentar orçamento',
   decrease_budget: 'Reduzir orçamento',
   adjust_roas_target: 'Ajustar meta de ROAS',
+  increase_roas_target: 'Aumentar meta de ROAS',
+  decrease_roas_target: 'Reduzir meta de ROAS',
   pause_ad_group: 'Pausar anúncio na campanha',
   move_ad_group_to_growth_campaign: 'Mover para campanha de crescimento',
   move_ad_group_to_profit_campaign: 'Mover para campanha de rentabilidade',
@@ -234,6 +253,30 @@ const run = computed(() => data.value?.run ?? null)
                 <template v-if="r.decidedAt"> em {{ formatDateTime(r.decidedAt) }}</template>
                 <template v-if="r.decisionNote">: "{{ r.decisionNote }}"</template>
               </p>
+              <div v-if="needsApplication(r)" class="applied">
+                <template v-if="r.appliedOn">
+                  Aplicada no Mercado Livre em {{ formatDay(r.appliedOn) }}. O resultado aparece em "Diário e resultados".
+                  <button :disabled="deciding === r.id" @click="setApplied(r, null)">Desfazer</button>
+                </template>
+                <template v-else>
+                  <label>
+                    Apliquei em
+                    <input
+                      type="date"
+                      :max="todayIso()"
+                      :value="appliedDates[r.id] ?? todayIso()"
+                      @input="appliedDates[r.id] = ($event.target as HTMLInputElement).value"
+                    />
+                  </label>
+                  <button class="primary" :disabled="deciding === r.id" @click="setApplied(r, appliedDates[r.id] ?? todayIso())">
+                    Marcar como aplicada
+                  </button>
+                  <small>
+                    Mudanças de orçamento e meta de ROAS são detectadas sozinhas na sincronização; informar o dia deixa a
+                    avaliação antes/depois mais precisa. Para as demais ações, a data é necessária para avaliar o resultado.
+                  </small>
+                </template>
+              </div>
             </template>
           </div>
         </div>
@@ -458,6 +501,16 @@ small {
 .buttons {
   display: flex;
   gap: 10px;
+}
+.applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.applied small {
+  flex-basis: 100%;
 }
 .discarded {
   margin-top: 16px;

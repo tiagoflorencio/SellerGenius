@@ -71,6 +71,7 @@ builder.Services.AddScoped<AdsSettingsService>();
 
 // Agente de Product Ads (IA): contexto/diagnóstico compartilhado, manual lido do arquivo e o analista.
 builder.Services.AddScoped<AdsDiagnosisService>();
+builder.Services.AddScoped<AdsDiaryService>();
 builder.Services.AddSingleton<AdsManualProvider>();
 builder.Services.AddScoped<AdsAdvisor>();
 
@@ -113,6 +114,7 @@ app.MapAgentEndpoints();
 // Rotas de Product Ads (/ads/...), definidas em Ads/AdsEndpoints.cs.
 app.MapAdsEndpoints();
 app.MapAdsAgentEndpoints();
+app.MapAdsDiaryEndpoints();
 
 // FASE 3: EXECUÇÃO
 // Inicia o servidor e bloqueia aqui, recebendo requisições até o processo ser encerrado.

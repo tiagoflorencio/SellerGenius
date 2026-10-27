@@ -250,6 +250,8 @@ export interface AdsSettings {
   weightUrgency: number
   weightEase: number
   weightReversibility: number
+  evaluationWindowDays: number
+  evaluationFlatBandPct: number
 }
 
 export interface AdsDiagnosisResponse {
@@ -304,6 +306,7 @@ export interface AdRecommendation {
   content: RecommendationContent
   decidedAt: string | null
   decisionNote: string | null
+  appliedOn: string | null
 }
 
 export interface AdAnalysisRunView {
@@ -337,6 +340,83 @@ export interface RecommendationsResponse {
   recommendations: AdRecommendation[]
   runs: RunSummary[]
   pendingTotal: number
+}
+
+// ---- Diário de mudanças e avaliação antes/depois ----
+export type EvaluationVerdict = 'melhorou' | 'piorou' | 'misto' | 'neutro' | 'inconclusivo' | 'aguardando'
+
+export interface EvaluationWindow {
+  from: string
+  to: string
+  daysWithDelivery: number
+  metrics: { clicks: number; cost: number; revenue: number; roas: number | null }
+}
+
+export interface MetricDelta {
+  key: string
+  label: string
+  unit: 'x' | 'brl' | 'pct' | 'num'
+  before: number | null
+  after: number | null
+  changePct: number | null
+  direction: 'up' | 'down' | 'flat' | 'na'
+  better: 'higher' | 'lower' | 'neutral'
+}
+
+export interface Evaluation {
+  status: 'aguardando' | 'provisorio' | 'final' | 'indisponivel'
+  verdict: EvaluationVerdict
+  reason: string
+  confidence: 'alta' | 'media' | 'baixa'
+  windowDays: number
+  elapsedDays: number
+  readyOn: string | null
+  before: EvaluationWindow | null
+  after: EvaluationWindow | null
+  deltas: MetricDelta[]
+  incrementalRoas: number | null
+  notes: string[]
+}
+
+export interface DiaryEvent {
+  key: string
+  kind: 'change' | 'applied'
+  date: string
+  campaignId: number | null
+  campaignName: string | null
+  changes: { id: number; field: string; oldValue: string; newValue: string }[]
+  recommendationId: number | null
+  recommendationTitle: string | null
+  recommendationAction: string | null
+  note: string | null
+  noteChangeId: number | null
+  successMetric: string | null
+  successCriterion: string | null
+  confounders: string[]
+  evaluation: Evaluation
+}
+
+export interface DiaryNote {
+  id: number
+  date: string
+  campaignId: number | null
+  campaignName: string | null
+  text: string
+}
+
+export interface AwaitingApplication {
+  recommendationId: number
+  title: string
+  action: string
+  campaignId: number | null
+  campaignName: string | null
+  decidedAt: string | null
+}
+
+export interface DiaryResponse {
+  events: DiaryEvent[]
+  notes: DiaryNote[]
+  awaiting: AwaitingApplication[]
 }
 
 export interface AdsSyncResult {

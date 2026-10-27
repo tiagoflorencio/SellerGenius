@@ -4,6 +4,7 @@ import type {
   AdsSyncResult,
   AdsDiagnosisResponse,
   AdsSettings,
+  DiaryResponse,
   RecommendationsResponse,
   Diagnosis,
   DraftReport,
@@ -40,6 +41,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+const json = { 'Content-Type': 'application/json' }
+
 export const api = {
   me: () => request<MlUser>('/ml/me'),
   listings: () => request<Listing[]>('/listings'),
@@ -66,6 +69,17 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision, note }),
     }),
+  adsDiary: () => request<DiaryResponse>('/ads/diary'),
+  saveChangeNote: (changeId: number, note: string) =>
+    request<{ id: number }>(`/ads/changes/${changeId}/note`, { method: 'PUT', headers: json, body: JSON.stringify({ note }) }),
+  addDiaryNote: (date: string, campaignId: number | null, text: string) =>
+    request<{ id: number }>('/ads/diary/notes', { method: 'POST', headers: json, body: JSON.stringify({ date, campaignId, text }) }),
+  deleteDiaryNote: async (id: number) => {
+    const res = await fetch(`/api/ads/diary/notes/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new ApiError(res.status, `Erro ${res.status}`)
+  },
+  markApplied: (recommendationId: number, date: string | null) =>
+    request<{ id: number }>(`/ads/recommendations/${recommendationId}/applied`, { method: 'PUT', headers: json, body: JSON.stringify({ date }) }),
   saveAdsSettings: (settings: AdsSettings) =>
     request<AdsSettings>('/ads/settings', {
       method: 'PUT',

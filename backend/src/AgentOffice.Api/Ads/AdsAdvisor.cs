@@ -11,6 +11,7 @@ public record AdvisorRunResult(AdAnalysisRun Run, List<AdRecommendation> Recomme
 // Divisão de trabalho: o código calcula (métricas, achados, prioridade, travas) e a IA interpreta, explica e sugere testes.
 public class AdsAdvisor(
     AdsDiagnosisService diagnosis,
+    AdsDiaryService diary,
     AdsManualProvider manualProvider,
     OpenAiClient ai,
     AgentOfficeDb db,
@@ -24,7 +25,8 @@ public class AdsAdvisor(
 
         PRECEDÊNCIA DAS EVIDÊNCIAS (da mais forte para a mais fraca):
         1. Os dados da conta e os "parametros" vigentes no JSON recebido. Se o manual divergir dos parâmetros, vale o parâmetro.
-        2. "licoes_aprendidas" (resultados medidos de mudanças anteriores nesta conta), quando houver.
+        2. "historico_de_mudancas" e "anotacoes_do_diario" (resultados medidos pelo sistema de mudanças anteriores nesta conta e
+           fatos que você não enxerga nas métricas, como promoções), quando houver; e "licoes_aprendidas", quando houver.
         3. O manual abaixo. Ele é uma política INICIAL, não um conjunto fixo de regras: quando os dados da conta mostrarem
            outra realidade, diga isso e explique por quê, em vez de seguir o texto às cegas.
         4. Conhecimento geral de marketplace.
@@ -45,22 +47,27 @@ public class AdsAdvisor(
 
         REGRAS DE SEGURANÇA:
         - Uma mudança de configuração por vez em cada campanha; nunca recomende ações conflitantes.
+        - "historico_de_mudancas": cada item traz o resultado ANTES x DEPOIS calculado pelo sistema. "aguardando" e
+          "provisorio" significam que ainda não dá para concluir: não recomende nova mudança na mesma campanha por isso.
+          "piorou" ou "misto" pesam contra repetir a mesma ação, salvo se você explicar o que é diferente agora.
+          Resultado "melhorou" é correlação, não prova: respeite "confianca" e "fatores" de cada item e cite o histórico
+          como evidência quando ele sustentar a recomendação.
         - Não recomende mudar campanhas listadas em "mudancas_recentes" nos últimos dias dos parâmetros (aguardam avaliação).
         - Não conclua com amostra pequena ("AMOSTRA_INSUFICIENTE"): prefira "collect_more_data" e explique.
-        - Se o custo de Ads já está acima do teto (achado "CUSTO_ACIMA_DA_FAIXA") não recomende aumentar orçamento nem
-          baixar a meta de ROAS (isso aumenta o gasto); prefira corrigir conversão, oferta, anúncio ou mix. Explique o raciocínio
-          da direção da mudança no "teste_sugerido" (baixar a meta de ROAS = o ML gasta mais; subir = gasta menos).
+        - Se o custo de Ads já está acima do teto (achado "CUSTO_ACIMA_DA_FAIXA") NÃO recomende "increase_budget" nem
+          "decrease_roas_target" (ambos aumentam o gasto; o sistema descarta). Prefira corrigir conversão, oferta, anúncio ou mix.
+          Lembre: baixar a meta de ROAS faz o Mercado Livre gastar mais; subir a meta faz gastar menos.
         - Trate correlação como hipótese. Informe confiança e riscos. Se não houver o que melhorar, devolva poucas
           recomendações (ou "no_action") e explique no resumo; não force recomendações.
         - Máximo de recomendações: o valor de parametros.maxRecommendations.
 
         AÇÕES PERMITIDAS ("acao") e o "escopo" exigido:
-        - increase_budget, decrease_budget, adjust_roas_target  -> escopo "campaign"
+        - increase_budget, decrease_budget, increase_roas_target, decrease_roas_target  -> escopo "campaign"
         - pause_ad_group, move_ad_group_to_growth_campaign, move_ad_group_to_profit_campaign -> escopo "ad_group"
         - improve_listing (foto, título, atributos, descrição), review_offer (preço, frete, prazo, estoque),
           review_costs (margem/meta financeira), collect_more_data, no_action -> escopo "campaign", "ad_group" ou "account"
         - Use EXATAMENTE esses nomes de ação (não invente outros, como "review_roas_target": para a meta de ROAS use
-          "adjust_roas_target"). "escopo" só aceita campaign, ad_group ou account; NÃO é o campo "onde".
+          "increase_roas_target" ou "decrease_roas_target"). "escopo" só aceita campaign, ad_group ou account; NÃO é o campo "onde".
           Para melhorar a foto/título de uma publicação, use escopo "ad_group" com o "ad_group_id" do anúncio.
 
         FORMATO DE SAÍDA: responda SOMENTE com um JSON, em português do Brasil, exatamente assim:
@@ -102,7 +109,7 @@ public class AdsAdvisor(
 
         var manual = manualProvider.Load();
         var system = SystemPromptTemplate.Replace("{{MANUAL}}", manual.Text);
-        var input = BuildInput(context, DateTimeOffset.UtcNow);
+        var input = BuildInput(context, DateTimeOffset.UtcNow, await diary.BuildAsync(ct));
         var inputJson = JsonSerializer.Serialize(input, Web);
 
         var result = await ai.CompleteJsonDetailedAsync(system, inputJson, ai.AdsModel, ct);
@@ -172,7 +179,7 @@ public class AdsAdvisor(
     }
 
     // Dados enviados à IA: compactos (menos tokens = menor custo), com nomes em português como o manual.
-    public static object BuildInput(AdsContext ctx, DateTimeOffset now)
+    public static object BuildInput(AdsContext ctx, DateTimeOffset now, DiaryResult? diary = null)
     {
         var diagByCampaign = ctx.Analysis.Campaigns.ToDictionary(c => c.CampaignId);
         var allDays = ctx.Inputs.SelectMany(i => i.Days).ToList();
@@ -239,8 +246,47 @@ public class AdsAdvisor(
                         }).ToList(),
                 };
             }).ToList(),
-            licoes_aprendidas = Array.Empty<object>(), // preenchido quando o diário de mudanças e a avaliação existirem
+            historico_de_mudancas = History(diary, now),
+            anotacoes_do_diario = (diary?.Notes ?? [])
+                .Where(n => now.LocalDateTime.Date - n.Date.ToDateTime(TimeOnly.MinValue) < TimeSpan.FromDays(60))
+                .Select(n => new { data = n.Date, campanha_id = n.CampaignId, texto = n.Text })
+                .ToList(),
+            licoes_aprendidas = Array.Empty<object>(), // preenchido quando o aprendizado (etapa 5) existir
         };
+    }
+
+    // Mudanças recentes com o resultado antes/depois já calculado pelo código (compacto, no máximo 10).
+    private static List<object> History(DiaryResult? diary, DateTimeOffset now)
+    {
+        double? Change(EvaluationResult ev, string key) => ev.Deltas.FirstOrDefault(d => d.Key == key)?.ChangePct;
+
+        return (diary?.Events ?? [])
+            .Where(e => now.LocalDateTime.Date - e.Date.ToDateTime(TimeOnly.MinValue) < TimeSpan.FromDays(90))
+            .Take(10)
+            .Select(e => (object)new
+            {
+                data = e.Date,
+                campanha_id = e.CampaignId,
+                campanha = e.CampaignName,
+                mudancas = e.Changes.Select(c => new { campo = c.Field, de = c.OldValue, para = c.NewValue }).ToList(),
+                acao_recomendada = e.RecommendationAction,
+                recomendacao = e.RecommendationTitle,
+                motivo_do_usuario = e.Note,
+                avaliacao = new
+                {
+                    status = e.Evaluation.Status,
+                    veredito = e.Evaluation.Verdict,
+                    confianca = e.Evaluation.Confidence,
+                    explicacao = e.Evaluation.Reason,
+                    variacao_roas_pct = Change(e.Evaluation, "roas"),
+                    variacao_receita_dia_pct = Change(e.Evaluation, "revenue_day"),
+                    variacao_gasto_dia_pct = Change(e.Evaluation, "cost_day"),
+                    variacao_tacos_pct = Change(e.Evaluation, "tacos"),
+                    retorno_incremental = e.Evaluation.IncrementalRoas,
+                },
+                fatores = e.Confounders,
+            })
+            .ToList();
     }
 
     private static object Metrics(AdMetrics m) => new

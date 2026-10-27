@@ -253,11 +253,38 @@ namespace AgentOffice.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("RecommendationId")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CampaignId", "DetectedAt");
 
                     b.ToTable("AdChanges");
+                });
+
+            modelBuilder.Entity("AgentOffice.Api.Data.AdDiaryNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CampaignId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdDiaryNotes");
                 });
 
             modelBuilder.Entity("AgentOffice.Api.Data.AdGroupMetric", b =>
@@ -351,6 +378,9 @@ namespace AgentOffice.Api.Data.Migrations
 
                     b.Property<long?>("AdGroupId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("AppliedOn")
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("CampaignId")
                         .HasColumnType("INTEGER");

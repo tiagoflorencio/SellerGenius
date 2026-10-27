@@ -40,7 +40,7 @@ public class AdsRecommendationProcessorTests
     }
 
     private static LlmRecommendation Rec(
-        string action = "adjust_roas_target", string scope = "campaign", long? campaign = 1, long? adGroup = null,
+        string action = "increase_roas_target", string scope = "campaign", long? campaign = 1, long? adGroup = null,
         string title = "Revisar meta de ROAS", string confidence = "alta", string[]? codes = null) =>
         new(scope, campaign, adGroup, action, "Campanha Ads", title, "Diagnóstico de teste.", ["evidência"], ["hipótese"],
             new LlmTest("mudar a meta", "-10%", 14, "ROAS", "ROAS >= meta"), "efeito", ["risco"], confidence,
@@ -101,7 +101,7 @@ public class AdsRecommendationProcessorTests
         var change = new AdChange { CampaignId = 1, Field = "Budget", OldValue = "50", NewValue = "100", DetectedAt = Now.AddDays(-3) };
         var ctx = Context(null, change);
 
-        var result = Run(ctx, Rec(action: "increase_budget"), Rec(action: "improve_listing", title: "Melhorar foto"));
+        var result = Run(ctx, Rec(action: "decrease_budget"), Rec(action: "improve_listing", title: "Melhorar foto"));
 
         Assert.Equal("improve_listing", result.Recommendations.Single().Action);
         Assert.Contains(result.Discarded, d => d.Reason.Contains("aguarde"));
@@ -112,16 +112,37 @@ public class AdsRecommendationProcessorTests
     {
         var change = new AdChange { CampaignId = 1, Field = "Budget", OldValue = "50", NewValue = "100", DetectedAt = Now.AddDays(-20) };
 
-        var result = Run(Context(null, change), Rec(action: "increase_budget"));
+        var result = Run(Context(null, change), Rec(action: "decrease_budget"));
 
         Assert.Single(result.Recommendations);
+    }
+
+    [Theory]
+    [InlineData("increase_budget")]
+    [InlineData("decrease_roas_target")]
+    public void Blocks_actions_that_raise_spending_when_cost_is_already_above_the_ceiling(string action)
+    {
+        // Campanha 1 está com TACOS acima do teto; a campanha 2 está saudável e pode escalar.
+        var result = Run(Context(), Rec(action: action), Rec(action: action, campaign: 2, title: "Escalar B", codes: []));
+
+        Assert.Equal("Escalar B", result.Recommendations.Single().Title);
+        Assert.Contains(result.Discarded, d => d.Reason.Contains("acima do teto"));
+    }
+
+    [Fact]
+    public void Legacy_adjust_roas_target_is_no_longer_accepted()
+    {
+        var result = Run(Context(), Rec(action: "adjust_roas_target"));
+
+        Assert.Empty(result.Recommendations);
+        Assert.Contains(result.Discarded, d => d.Reason.Contains("desconhecida"));
     }
 
     [Fact]
     public void Keeps_only_the_highest_priority_settings_change_per_campaign()
     {
         var result = Run(Context(),
-            Rec(action: "adjust_roas_target", title: "Alta confiança", confidence: "alta"),
+            Rec(action: "increase_roas_target", title: "Alta confiança", confidence: "alta"),
             Rec(action: "decrease_budget", title: "Baixa confiança", confidence: "baixa"));
 
         var kept = Assert.Single(result.Recommendations);
@@ -133,7 +154,7 @@ public class AdsRecommendationProcessorTests
     public void Allows_one_settings_change_in_each_of_two_campaigns()
     {
         var result = Run(Context(),
-            Rec(action: "adjust_roas_target", campaign: 1),
+            Rec(action: "increase_roas_target", campaign: 1),
             Rec(action: "increase_budget", campaign: 2, title: "Escalar B"));
 
         Assert.Equal(2, result.Recommendations.Count);

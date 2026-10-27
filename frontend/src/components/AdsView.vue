@@ -15,6 +15,7 @@ import AdCampaignDrawer from './AdCampaignDrawer.vue'
 import AdsSettingsDrawer from './AdsSettingsDrawer.vue'
 import FindingList from './FindingList.vue'
 import AdsAdvisorView from './AdsAdvisorView.vue'
+import AdsDiaryView from './AdsDiaryView.vue'
 import { activity } from '../activity'
 import StateChip from './StateChip.vue'
 
@@ -23,7 +24,7 @@ const overview = ref<AdsOverview | null>(null)
 const diagnosis = ref<AdsDiagnosisResponse | null>(null)
 const showSettings = ref(false)
 const showAllTop = ref(false)
-const mode = ref<'overview' | 'agent'>('overview')
+const mode = ref<'overview' | 'agent' | 'diary'>('overview')
 const loading = ref(true)
 const syncing = ref(false)
 const error = ref<string | null>(null)
@@ -93,6 +94,7 @@ const t = computed(() => overview.value?.totals ?? null)
         Agente de Ads
         <span v-if="activity.adsPending > 0" class="pill">{{ activity.adsPending }}</span>
       </button>
+      <button :class="{ active: mode === 'diary' }" @click="mode = 'diary'">Diário e resultados</button>
     </nav>
 
     <div class="toolbar">
@@ -115,6 +117,7 @@ const t = computed(() => overview.value?.totals ?? null)
 
     <p v-if="error" class="banner bad">{{ error }}</p>
     <AdsAdvisorView v-if="mode === 'agent'" :days="days" />
+    <AdsDiaryView v-else-if="mode === 'diary'" />
     <p v-else-if="loading && !overview" class="muted">Carregando...</p>
 
     <template v-else-if="overview">

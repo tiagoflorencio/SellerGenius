@@ -133,6 +133,7 @@ public class AgentOfficeDb(DbContextOptions<AgentOfficeDb> options) : DbContext(
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<AdAnalysisRun> AdAnalysisRuns => Set<AdAnalysisRun>();
     public DbSet<AdRecommendation> AdRecommendations => Set<AdRecommendation>();
+    public DbSet<AdDiaryNote> AdDiaryNotes => Set<AdDiaryNote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

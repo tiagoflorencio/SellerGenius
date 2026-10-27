@@ -48,3 +48,9 @@ export const formatNumber = (value: number | null) => (value === null ? '–' : 
 
 export const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+
+// Data (YYYY-MM-DD) sem hora: evita o deslocamento de fuso de new Date('YYYY-MM-DD').
+export const formatDay = (iso: string) => iso.split('-').reverse().join('/')
+
+// Hoje no fuso local, no formato de <input type="date">.
+export const todayIso = () => new Date().toLocaleDateString('sv-SE')

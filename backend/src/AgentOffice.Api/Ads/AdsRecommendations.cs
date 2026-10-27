@@ -91,7 +91,8 @@ public static class AdsRecommendationProcessor
     {
         ["increase_budget"] = new(Where.Campaign, 90, 100, ["campaign"], true),
         ["decrease_budget"] = new(Where.Campaign, 90, 100, ["campaign"], true),
-        ["adjust_roas_target"] = new(Where.Campaign, 80, 100, ["campaign"], true),
+        ["increase_roas_target"] = new(Where.Campaign, 80, 100, ["campaign"], true),
+        ["decrease_roas_target"] = new(Where.Campaign, 80, 100, ["campaign"], true),
         ["pause_ad_group"] = new(Where.Campaign, 85, 90, ["ad_group"], false),
         ["move_ad_group_to_growth_campaign"] = new(Where.Campaign, 60, 80, ["ad_group"], false),
         ["move_ad_group_to_profit_campaign"] = new(Where.Campaign, 60, 80, ["ad_group"], false),
@@ -155,6 +156,14 @@ public static class AdsRecommendationProcessor
                 .Distinct()
                 .ToList();
             var matched = findings.Where(f => codes.Contains(f.Code)).ToList();
+
+            // Trava: com o custo de Ads já acima do teto, gastar mais (orçamento maior ou meta de ROAS menor) contraria a sua meta de custo.
+            if (action is "increase_budget" or "decrease_roas_target" && campaignId is not null
+                && campaignById[campaignId.Value].Diagnosis.Findings.Any(f => f.Code == "CUSTO_ACIMA_DA_FAIXA"))
+            {
+                Drop("O custo de Ads da campanha já está acima do teto; aumentar o gasto contraria a meta de custo.");
+                continue;
+            }
 
             // Trava: campanha alterada há pouco tempo aguarda a avaliação antes de nova mudança de configuração.
             if (info.ChangesCampaignSettings && campaignId is not null && s.RecentChangeDays > 0)

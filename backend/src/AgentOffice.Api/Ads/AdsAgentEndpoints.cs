@@ -24,7 +24,8 @@ public record RecommendationView(
     string[] FindingCodes,
     JsonElement Content,
     DateTimeOffset? DecidedAt,
-    string? DecisionNote);
+    string? DecisionNote,
+    DateOnly? AppliedOn);
 
 public record RunView(
     int Id,
@@ -115,7 +116,7 @@ public static class AdsAgentEndpoints
                     r.Action, r.Where, r.Title, r.Priority, r.Confidence, r.ImpactBrl, r.ImpactUnknown,
                     r.FindingCodes.Split(',', StringSplitOptions.RemoveEmptyEntries),
                     JsonSerializer.Deserialize<JsonElement>(r.ContentJson),
-                    r.DecidedAt, r.DecisionNote))
+                    r.DecidedAt, r.DecisionNote, r.AppliedOn))
                 .ToList();
 
             var runView = new RunView(

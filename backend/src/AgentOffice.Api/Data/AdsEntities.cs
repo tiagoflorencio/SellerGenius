@@ -65,6 +65,10 @@ public class AdRecommendation
 
     // Motivo da sua decisão. Recusas explicadas valem ouro para o aprendizado do agente.
     public string? DecisionNote { get; set; }
+
+    // Dia em que VOCÊ aplicou a mudança no Mercado Livre. Marca o início da avaliação antes/depois
+    // (mudanças de campanha também são detectadas sozinhas na sincronização; as demais dependem desta data).
+    public DateOnly? AppliedOn { get; set; }
 }
 
 // Retrato diário da configuração de uma campanha. O Mercado Livre não guarda o histórico de orçamento/meta,
@@ -94,8 +98,24 @@ public class AdChange
     public string OldValue { get; set; } = "";
     public string NewValue { get; set; } = "";
 
-    // Motivo anotado por você (futuro): alimenta o aprendizado do agente.
+    // Motivo anotado por você: alimenta o aprendizado do agente.
     public string? Note { get; set; }
+
+    // Recomendação aprovada que originou esta mudança (ligada automaticamente pelo diário).
+    public int? RecommendationId { get; set; }
+}
+
+// Anotação livre do diário (promoção, mudança de preço, falta de estoque...): fatores que explicam resultados
+// além das mudanças de campanha. Entram na avaliação como possíveis fatores de confusão.
+public class AdDiaryNote
+{
+    public int Id { get; set; }
+    public DateOnly Date { get; set; }
+
+    // Null = vale para a conta toda.
+    public long? CampaignId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 // Parâmetros e preferências do sistema, em JSON. Ficam no banco (e não no código) para poderem mudar sem novo

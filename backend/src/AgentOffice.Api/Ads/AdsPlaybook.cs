@@ -51,6 +51,10 @@ public class AdsPlaybookSettings
     public double WeightEase { get; set; } = 10;
     public double WeightReversibility { get; set; } = 10;
 
+    // ---- Avaliação antes/depois das mudanças ----
+    public int EvaluationWindowDays { get; set; } = 14;        // dias comparados antes e depois (se a recomendação não sugerir outro)
+    public double EvaluationFlatBandPct { get; set; } = 5;     // variação até este % é tratada como "estável"
+
     // Retorna a mensagem do primeiro problema encontrado, ou null se os valores são válidos.
     public string? Validate()
     {
@@ -70,6 +74,8 @@ public class AdsPlaybookSettings
         if (TrendChangePct <= 0) return "A variação de tendência deve ser maior que zero.";
         if (MaxRecommendations is < 1 or > 20) return "O máximo de recomendações deve estar entre 1 e 20.";
         if (RecentChangeDays is < 0 or > 60) return "Os dias de espera após uma mudança devem estar entre 0 e 60.";
+        if (EvaluationWindowDays is < 7 or > 30) return "A janela de avaliação deve estar entre 7 e 30 dias.";
+        if (EvaluationFlatBandPct is < 0 or > 50) return "A faixa de estabilidade deve estar entre 0 e 50%.";
         if (new[] { WeightImpact, WeightConfidence, WeightUrgency, WeightEase, WeightReversibility }.Any(w => w < 0)
             || WeightImpact + WeightConfidence + WeightUrgency + WeightEase + WeightReversibility <= 0)
             return "Os pesos da prioridade não podem ser negativos e a soma deve ser maior que zero.";

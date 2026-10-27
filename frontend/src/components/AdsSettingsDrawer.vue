@@ -66,6 +66,8 @@ const groups = [
       { key: 'weightUrgency', label: 'Peso: urgência', hint: '' },
       { key: 'weightEase', label: 'Peso: facilidade', hint: '' },
       { key: 'weightReversibility', label: 'Peso: reversibilidade', hint: '' },
+      { key: 'evaluationWindowDays', label: 'Janela de avaliação antes/depois (dias)', hint: 'Dias comparados antes e depois de uma mudança, quando a recomendação não sugerir outra janela (7 a 30).' },
+      { key: 'evaluationFlatBandPct', label: 'Faixa de estabilidade na avaliação (%)', hint: 'Variações até este valor são tratadas como "sem mudança".' },
     ],
   },
 ] as const
